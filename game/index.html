@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>2048 Drop</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>2048 <span>DROP</span></h1>
+      <div class="scores">
+        <div class="box"><label>점수</label><b id="score">0</b></div>
+        <div class="box"><label>최고</label><b id="best">0</b></div>
+      </div>
+    </header>
+
+    <div class="bar">
+      <div class="next"><label>다음</label><div id="next" class="mini"></div></div>
+      <button id="pauseBtn">일시정지</button>
+      <button id="restartBtn">새 게임</button>
+    </div>
+
+    <div id="board" class="board">
+      <div id="bg" class="layer"></div>
+      <div id="tiles" class="layer"></div>
+      <div id="overlay" class="overlay">
+        <div class="card">
+          <h2 id="ovTitle">2048 DROP</h2>
+          <p id="ovText">같은 숫자, 또는 더해서 끝자리 0이 늘어나는<br>숫자를 붙여서 합치세요!</p>
+          <button id="ovBtn">시작하기</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="help">같은 숫자 → 합체 · 더해서 끝자리 0이 늘어나면 → 합체<br>(4+6=10 → 30+70=100 → 300+700=1000 …)<br>칸을 탭/드래그해서 위치 선택 · 손을 떼면 바로 떨어짐<br>키보드: ← → 이동 · ↓ 빠르게 · Space 즉시 낙하 · P 일시정지</p>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

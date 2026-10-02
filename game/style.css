@@ -1,0 +1,152 @@
+:root {
+  --bg: #faf8ef;
+  --board: #bbada0;
+  --cell-bg: #cdc1b4;
+  --text: #776e65;
+  --accent: #f67c5f;
+  --btn: #8f7a66;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+  max-width: 460px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+h1 { margin: 0; font-size: 34px; font-weight: 800; }
+h1 span { font-size: 18px; color: var(--accent); }
+
+.scores { display: flex; gap: 6px; }
+.box {
+  min-width: 60px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: var(--board);
+  color: #fff;
+  text-align: center;
+}
+.box label { display: block; font-size: 11px; color: #eee4da; }
+.box b { font-size: 18px; }
+
+.bar { width: 100%; display: flex; align-items: center; gap: 8px; }
+.next { display: flex; align-items: center; gap: 8px; margin-right: auto; font-weight: 700; }
+
+button {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--btn);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+button:active { transform: scale(0.96); }
+
+/* 보드: COLS x (ROWS + 1). 맨 윗줄은 숫자가 생성되는 대기 줄 */
+.board {
+  position: relative;
+  width: min(100%, calc((100dvh - 240px) * var(--cols) / (var(--rows) + 1)));
+  aspect-ratio: var(--cols) / calc(var(--rows) + 1);
+  padding: 6px;
+  border-radius: 8px;
+  background: var(--board);
+  overflow: hidden;
+}
+
+.layer { position: absolute; inset: 6px; }
+
+.cell, .tile, .ghost {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(100% / var(--cols));
+  height: calc(100% / (var(--rows) + 1));
+}
+
+.cell::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 5px;
+  background: var(--cell-bg);
+}
+.cell.spawn::after { background: rgba(238, 228, 218, 0.25); }
+
+.ghost { display: none; }
+.ghost::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 5px;
+  border: 2px dashed rgba(255, 255, 255, 0.8);
+}
+
+.tile { transition: transform 0.12s ease-out; will-change: transform; }
+.tile.falling { transition: none; z-index: 2; }
+
+.inner {
+  position: absolute;
+  inset: 4px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: calc(var(--cell) * 0.42);
+}
+.inner[data-len="3"] { font-size: calc(var(--cell) * 0.34); }
+.inner[data-len="4"] { font-size: calc(var(--cell) * 0.27); }
+.inner[data-len="5"] { font-size: calc(var(--cell) * 0.22); }
+
+.tile.spawn .inner { animation: appear 0.15s ease-out; }
+.tile.pop .inner { animation: pop 0.2s ease-out; }
+
+@keyframes appear { from { transform: scale(0.3); } to { transform: scale(1); } }
+@keyframes pop { 50% { transform: scale(1.18); } }
+
+.mini { position: relative; width: 44px; height: 44px; --cell: 48px; }
+.mini .inner { inset: 0; }
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(250, 248, 239, 0.8);
+}
+.overlay.hidden { display: none; }
+.card { text-align: center; padding: 16px; }
+.card h2 { margin: 0 0 8px; font-size: 32px; }
+.card p { margin: 0 0 16px; }
+
+.help { margin: 0; font-size: 12px; text-align: center; line-height: 1.6; }
