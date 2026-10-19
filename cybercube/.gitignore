@@ -1,0 +1,6 @@
+node_modules/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+# 빌드 결과물 (npm run build로 다시 만들 수 있음)
+www/cloud.js

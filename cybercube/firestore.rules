@@ -1,0 +1,38 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 진행 상황: 각 플레이어는 자기 문서(players/{자기 uid})만 읽고 쓸 수 있음
+    match /players/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['progress', 'updatedAt'])
+        && request.resource.data.progress is map;
+    }
+
+    // 랭킹: 누구나 읽기, 자기 기록만 쓰기
+    // 기록 = 클리어 시간(ms) + 피격 횟수 × 5000, 낮을수록 좋음
+    match /stages/{stage}/scores/{uid} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && stage.matches('[0-9]{1,2}')
+        && validScore(request.resource.data)
+        && request.resource.data.at == request.time;
+      // 더 좋은 기록으로 바꾸거나, 닉네임만 바꾸기
+      allow update: if request.auth != null && request.auth.uid == uid
+        && validScore(request.resource.data)
+        && ((request.resource.data.score < resource.data.score
+              && request.resource.data.at == request.time)
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
+    }
+
+    function validScore(d) {
+      return d.keys().hasOnly(['name', 'score', 'ms', 'hits', 'at'])
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 12
+        && d.ms is int && d.ms >= 3000
+        && d.hits is int && d.hits >= 0 && d.hits <= 2
+        && d.score == d.ms + d.hits * 5000
+        && d.at is timestamp;
+    }
+  }
+}
