@@ -1,13 +1,17 @@
-// Cyber Cube - 파랑은 밟고, 빨강은 피하고, 초록에서 숨기
+// Cube Clean - 파랑은 밟고, 빨강은 피하고, 초록에서 숨기
 (() => {
   const COLS = 6;
   const ROWS = 8;
   const MAX_LIVES = 3;
   const INVINCIBLE_TIME = 1.2;
+  const BLUE_SHUFFLE_TIME = 5;  // 남은 파랑을 다른 칸으로 옮기는 주기 (초)
+  const BLUE_SHUFFLE_WARN = 1;  // 옮기기 전에 깜빡이는 시간 (초)
   const SAVE_KEY = 'cybercube.progress';
 
   const $ = (id) => document.getElementById(id);
+  const t = window.I18N.t;
   const stageScreen = $('stageScreen');
+  const demoScreen = $('demoScreen');
   const gameScreen = $('gameScreen');
   const boardWrap = $('boardWrap');
   const board = $('board');
@@ -36,7 +40,7 @@
     progress.name = merged.name || progress.name;
     progress.updated = merged.updated;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(progress)); } catch (e) { /* 무시 */ }
-    if (!state) showStages();
+    if (!state && demoScreen.classList.contains('hidden')) showStages();
   }
 
   // 기록 = 클리어 시간 + 피격당 5초 (firestore.rules와 같은 계산)
@@ -69,8 +73,11 @@
     step: () => beep(220, 0.04, 'triangle', 0.04),
     blue: () => { beep(660, 0.06); beep(990, 0.08, 'square', 0.05, 0.05); },
     hit: () => beep(90, 0.3, 'sawtooth', 0.12),
+    crack: () => { beep(2400, 0.04, 'square', 0.05); beep(1700, 0.05, 'square', 0.04, 0.03); },
+    shatter: () => [2600, 2100, 3000, 1600, 2300, 1200].forEach((f, i) => beep(f, 0.06, 'square', 0.05, i * 0.035)),
     tick: () => beep(440, 0.08, 'sine', 0.08),
     go: () => beep(880, 0.15, 'sine', 0.08),
+    shuffle: () => { beep(1200, 0.05, 'sine', 0.05); beep(600, 0.08, 'sine', 0.05, 0.05); },
     clear: () => [523, 659, 784, 1046].forEach((f, i) => beep(f, 0.12, 'square', 0.06, i * 0.09)),
     fail: () => [300, 220, 150].forEach((f, i) => beep(f, 0.18, 'sawtooth', 0.08, i * 0.15)),
   };
@@ -82,6 +89,15 @@
   let cellClass = [];    // 칸별 현재 클래스 (바뀐 칸만 갱신)
   let lastTime = 0;
   let rafId = 0;
+
+  // 난이도: 스테이지 번호(0~35) ↔ 난이도 탭 + 그 안의 번호
+  const tierStart = (ti) => TIERS.slice(0, ti).reduce((sum, t) => sum + t.stages.length, 0);
+  function tierOf(n) {
+    let ti = 0;
+    while (ti < TIERS.length - 1 && n >= tierStart(ti + 1)) ti++;
+    return { tier: ti, num: n - tierStart(ti) + 1 };
+  }
+  const stageLabel = (n) => { const { tier, num } = tierOf(n); return t('stageLabel', { tier: t(`tier${TIERS[tier].name}`), n: num }); };
 
   const idx = (x, y) => y * COLS + x;
   const inside = (x, y) => x >= 0 && x < COLS && y >= 0 && y < ROWS;
@@ -126,9 +142,13 @@
       phase: 'ready',              // ready → play → paused / clear / fail
       hazards: def.hazards.map((h) => ({ ...h, acc: 0 })),
       pops: new Set(),
+      shuffleSpec: def.shuffle ?? BLUE_SHUFFLE_TIME,     // 숫자 = 고정 주기, [최소, 최대] = 매번 랜덤
+      shuffleLeft: nextShuffleTime(def.shuffle ?? BLUE_SHUFFLE_TIME), // 파랑이 옮겨지기까지 남은 시간
     };
 
-    $('stageName').textContent = `STAGE ${n + 1}`;
+    $('stageName').textContent = stageLabel(n);
+    restorePlayer();
+    progress.tab = tierOf(n).tier; // 나가면 이 스테이지의 난이도 탭이 보이게
     stageScreen.classList.add('hidden');
     gameScreen.classList.remove('hidden');
     closeModal();
@@ -220,6 +240,8 @@
     const nx = state.px + dx;
     const ny = state.py + dy;
     if (!inside(nx, ny) || state.tiles[idx(nx, ny)] === '#') return;
+    playerEl.classList.toggle('diag', dx !== 0 && dy !== 0); // 대각선은 거리가 길어서 애니메이션도 조금 길게
+    rollPlayer(playerEl, dx, dy);
     state.px = nx;
     state.py = ny;
     const i = idx(nx, ny);
@@ -252,8 +274,69 @@
     void board.offsetWidth;
     board.classList.add('shake');
     updateHud();
-    if (state.lives <= 0) failStage('OUT OF LIFE');
+    if (state.lives <= 0) {
+      state.phase = 'breaking';
+      shatterPlayer();
+      setTimeout(() => { if (state && state.phase === 'breaking') failStage('outOfLife'); }, 1050);
+    } else {
+      sfx.crack();
+    }
   }
+
+  // 다음 파랑 이동까지 시간: 숫자면 그대로, [최소, 최대]면 그 사이 랜덤, 0이면 이동 없음
+  function nextShuffleTime(spec) {
+    if (Array.isArray(spec)) return spec[0] + Math.random() * (spec[1] - spec[0]);
+    return spec;
+  }
+
+  // 아직 안 밟은 파랑을 빈 칸(바닥·밟은 칸)으로 순간이동
+  // 플레이어 칸, 지금 빨간 칸, 깜빡이 칸, 원래 파랑 칸으로는 안 옮김
+  function shuffleBlue() {
+    const red = redMap();
+    const pool = [];
+    state.tiles.forEach((t, i) => {
+      if ((t === '.' || t === 'D') && red[i] === 0 && i !== idx(state.px, state.py)) pool.push(i);
+    });
+    const from = [];
+    state.tiles.forEach((t, i) => { if (t === 'B') from.push(i); });
+    from.forEach((i) => {
+      if (!pool.length) return;
+      const to = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+      state.tiles[i] = '.';
+      state.tiles[to] = 'B';
+      state.pops.add(to);
+      setTimeout(() => state && state.pops.delete(to), 350);
+    });
+    if (from.length) sfx.shuffle();
+  }
+
+  // ── 육각형 금·깨짐 (모양 계산과 조각은 crack.js) ──
+  function shatterPlayer() {
+    sfx.shatter();
+    vibrate([30, 30, 120]);
+    // 충격 순간: 금이 꽉 찬 채로 번쩍 → 금선을 따라 조각
+    playerEl.dataset.crack = '2';
+    playerEl.classList.add('crack-flash');
+    setTimeout(() => {
+      if (state && state.phase === 'breaking') window.Crack.shatter(playerEl);
+    }, 90);
+  }
+
+  // 조각 치우고 새 금 모양 준비 (판 시작·이어하기)
+  function restorePlayer() {
+    window.Crack.reset(playerEl);
+  }
+
+  // 육각형 굴리기: 오른쪽·아래로 가면 시계 방향, 왼쪽·위로 가면 반시계 방향으로 60°
+  function rollPlayer(el, dx, dy) {
+    const turn = dx !== 0 ? Math.sign(dx) : Math.sign(dy);
+    el.rot = (el.rot || 0) + 60 * turn;
+    el.style.setProperty('--rot', `${el.rot}deg`);
+    el.classList.remove('rolling'); // 구를 때마다 '살짝 커졌다 돌아오기'를 처음부터 다시
+    void el.offsetWidth;
+    el.classList.add('rolling');
+  }
+  window.rollPlayer = rollPlayer; // 시연 화면에서도 같이 씀
 
   // ── 루프 ──
   function loop(now) {
@@ -265,7 +348,7 @@
       const after = Math.ceil(state.countdown / 0.6);
       if (state.countdown <= 0) {
         state.phase = 'play';
-        countdownEl.textContent = 'GO';
+        countdownEl.textContent = t('go');
         sfx.go();
         setTimeout(() => countdownEl.classList.add('hidden'), 400);
       } else {
@@ -281,8 +364,12 @@
         h.acc += dt * h.speed;
         while (h.acc >= 1) { h.acc -= 1; stepHazard(h); }
       });
+      if (state.shuffleLeft > 0) {
+        state.shuffleLeft -= dt;
+        if (state.shuffleLeft <= 0) { shuffleBlue(); state.shuffleLeft += nextShuffleTime(state.shuffleSpec); }
+      }
       checkHit();
-      if (state.phase === 'play' && state.timeLeft <= 0) failStage('TIME UP');
+      if (state.phase === 'play' && state.timeLeft <= 0) failStage('timeUp');
       updateHud();
     }
     render();
@@ -292,6 +379,7 @@
   // ── 그리기 ──
   function render() {
     const red = redMap();
+    const moving = state.phase === 'play' && state.shuffleLeft > 0 && state.shuffleLeft <= BLUE_SHUFFLE_WARN;
     for (let i = 0; i < cells.length; i++) {
       const t = state.tiles[i];
       let cls = 'cell';
@@ -299,13 +387,22 @@
       else if (t === 'G') cls += ' green';
       else if (red[i] === 2) cls += ' red';
       else if (red[i] === 1) cls += ' warn';
-      else if (t === 'B') cls += ' blue';
+      else if (t === 'B') cls += moving ? ' blue moving' : ' blue';
       else if (t === 'D') cls += ' done';
       if (state.pops.has(i)) cls += ' pop';
       if (cls !== cellClass[i]) { cells[i].className = cls; cellClass[i] = cls; }
     }
     playerEl.style.transform = `translate(${state.px * 100}%, ${state.py * 100}%)`;
     playerEl.classList.toggle('invincible', state.invincible > 0);
+    const crack = String(Math.min(2, MAX_LIVES - state.lives));
+    if (playerEl.dataset.crack !== crack) {
+      if (Number(crack) > Number(playerEl.dataset.crack || 0)) {
+        playerEl.classList.remove('crack-flash');
+        void playerEl.offsetWidth;
+        playerEl.classList.add('crack-flash');
+      }
+      playerEl.dataset.crack = crack;
+    }
   }
 
   function updateHud() {
@@ -329,34 +426,38 @@
   // ── 클리어 / 실패 / 일시정지 ──
   function clearStage() {
     state.phase = 'clear';
+    window.Ads.countResult();
     const n = state.n;
-    const stars = Math.max(1, 3 - state.hits);
     const ms = Math.max(3000, Math.round(state.clock * 1000));
     const score = ms + state.hits * HIT_PENALTY_MS;
+    sfx.clear();
+    vibrate(80);
+
+    // 광고 보고 이어한 판: 별 1개, 기록·랭킹에는 안 남김
+    if (state.continued) {
+      progress.stars[n] = Math.max(progress.stars[n] || 0, 1);
+      save();
+      showModal(t('clear'), `${fmt(score)} · ${t('continued')}`, 1, resultButtons(n));
+      return;
+    }
+
+    const stars = Math.max(1, 3 - state.hits);
     const prevBest = progress.best[n];
     const newBest = prevBest == null || score < prevBest;
     progress.stars[n] = Math.max(progress.stars[n] || 0, stars);
     if (newBest) progress.best[n] = score;
     save();
-    sfx.clear();
-    vibrate(80);
-    const hasNext = n + 1 < STAGES.length;
     const penalty = state.hits ? ` (+${state.hits * 5}s)` : '';
-    showModal('CLEAR!', `${fmt(score)}${penalty}${newBest ? ' · NEW BEST' : ''}`, stars, [
-      hasNext && ['NEXT ▶', () => startStage(n + 1)],
-      ['🏆 RANKING', () => showRanking(n), true],
-      ['RETRY', () => startStage(n), true],
-      ['STAGES', showStages, true],
-    ]);
+    showModal(t('clear'), `${fmt(score)}${penalty}${newBest ? ` · ${t('newBest')}` : ''}`, stars, resultButtons(n));
 
     // 랭킹에 올리고 순위 표시
     if (!window.cloud) return;
     const token = rankToken;
     const body = $('modalBody');
-    body.innerHTML = '<p class="rank-line">RANK …</p>';
+    body.innerHTML = `<p class="rank-line">${t('rank')} …</p>`;
     window.cloud.submit(n, { name: playerName(), score, ms, hits: state.hits }).then((rank) => {
       if (token !== rankToken) return; // 그새 다른 화면으로 바뀜
-      body.innerHTML = rank ? `<p class="rank-line">RANK <b>#${rank}</b></p>` : '';
+      body.innerHTML = rank ? `<p class="rank-line">${t('rank')} <b>#${rank}</b></p>` : '';
     });
   }
 
@@ -364,20 +465,20 @@
   let rankToken = 0; // 모달이 바뀔 때마다 증가 → 늦게 온 응답이 다른 화면을 덮어쓰지 않게
   function showRanking(n) {
     const back = state && state.phase === 'clear' ? clearModalBack : closeModal;
-    showModal('RANKING', '', null, [['CLOSE', back, true]]);
+    showModal(t('ranking'), '', null, [[t('close'), back, true]]);
     const token = rankToken;
     const body = $('modalBody');
     body.innerHTML = `
       <div class="rank-nav">
         <button class="secondary icon" id="rankPrev" ${n === 0 ? 'disabled' : ''}>◀</button>
-        <b>STAGE ${n + 1}</b>
+        <b>${stageLabel(n)}</b>
         <button class="secondary icon" id="rankNext" ${n === STAGES.length - 1 ? 'disabled' : ''}>▶</button>
       </div>
-      <ol class="rank-list" id="rankList"><li class="empty">LOADING…</li></ol>
+      <ol class="rank-list" id="rankList"><li class="empty">${t('loading')}</li></ol>
       <p class="rank-me" id="rankMe"></p>
       <div class="name-row">
-        <input id="nameInput" maxlength="12" placeholder="NAME" autocomplete="off">
-        <button id="nameBtn" class="secondary">OK</button>
+        <input id="nameInput" maxlength="12" placeholder="${t('name')}" autocomplete="off">
+        <button id="nameBtn" class="secondary">${t('ok')}</button>
       </div>`;
     $('rankPrev').onclick = () => showRanking(n - 1);
     $('rankNext').onclick = () => showRanking(n + 1);
@@ -394,8 +495,8 @@
     };
 
     const myBest = progress.best[n];
-    $('rankMe').textContent = myBest == null ? 'MY BEST —' : `MY BEST ${fmt(myBest)}`;
-    if (!window.cloud) { $('rankList').innerHTML = '<li class="empty">OFFLINE</li>'; return; }
+    $('rankMe').textContent = myBest == null ? `${t('myBest')} —` : `${t('myBest')} ${fmt(myBest)}`;
+    if (!window.cloud) { $('rankList').innerHTML = `<li class="empty">${t('offline')}</li>`; return; }
     Promise.all([
       window.cloud.top(n, 10),
       myBest == null ? null : window.cloud.rank(n, myBest),
@@ -403,8 +504,8 @@
       if (token !== rankToken) return;
       const ol = $('rankList');
       ol.innerHTML = '';
-      if (!list) { ol.innerHTML = '<li class="empty">OFFLINE</li>'; return; }
-      if (!list.length) { ol.innerHTML = '<li class="empty">NO RECORDS YET</li>'; return; }
+      if (!list) { ol.innerHTML = `<li class="empty">${t('offline')}</li>`; return; }
+      if (!list.length) { ol.innerHTML = `<li class="empty">${t('noRecords')}</li>`; return; }
       list.forEach((r, i) => {
         const li = document.createElement('li');
         if (r.uid === window.cloud.uid) li.className = 'me';
@@ -416,7 +517,7 @@
         });
         ol.appendChild(li);
       });
-      if (myRank) $('rankMe').textContent = `MY BEST ${fmt(myBest)} · #${myRank}`;
+      if (myRank) $('rankMe').textContent = `${t('myBest')} ${fmt(myBest)} · #${myRank}`;
     });
   }
 
@@ -428,22 +529,67 @@
   // 클리어 화면에서 랭킹을 열었다가 닫으면 클리어 화면으로 돌아감
   function clearModalBack() {
     const n = state.n;
+    const best = progress.best[n];
+    showModal(t('clear'), best == null ? '' : `${t('myBest')} ${fmt(best)}`, progress.stars[n], resultButtons(n));
+  }
+
+  // 결과 화면 버튼: 다음 행동 전에 전면 광고 차례면 먼저 보여줌 (출시 모드만)
+  const afterAd = (fn) => () => window.Ads.beforeNext().then(fn);
+  function resultButtons(n) {
     const hasNext = n + 1 < STAGES.length;
-    showModal('CLEAR!', `MY BEST ${fmt(progress.best[n])}`, progress.stars[n], [
-      hasNext && ['NEXT ▶', () => startStage(n + 1)],
-      ['🏆 RANKING', () => showRanking(n), true],
-      ['RETRY', () => startStage(n), true],
-      ['STAGES', showStages, true],
-    ]);
+    return [
+      hasNext && [t('next'), afterAd(() => startStage(n + 1))],
+      [`🏆 ${t('ranking')}`, () => showRanking(n), true],
+      [t('retry'), afterAd(() => startStage(n)), true],
+      [t('stages'), afterAd(showStages), true],
+    ];
   }
 
   function failStage(reason) {
     state.phase = 'fail';
+    state.failReason = reason;
+    window.Ads.countResult();
     sfx.fail();
-    showModal('FAILED', reason, null, [
-      ['RETRY', () => startStage(state.n)],
-      ['STAGES', showStages, true],
+    showFailModal();
+  }
+
+  function showFailModal() {
+    const n = state.n;
+    const life = state.failReason === 'outOfLife';
+    const cfg = window.ADS_CONFIG || {};
+    // 보상형 광고 이어하기: 출시 모드에서 한 판에 한 번
+    const canContinue = window.Ads.isRelease() && !state.continued;
+    showModal(t('failed'), t(state.failReason), null, [
+      canContinue && [
+        life ? t('watchAdLife', { n: cfg.rewardedLife ?? 1 }) : t('watchAdTime', { n: cfg.rewardedTime ?? 15 }),
+        async () => {
+          const ok = await window.Ads.showRewarded();
+          if (ok) continueStage(life);
+          else showFailModal(); // 끝까지 안 봤으면 그대로
+        },
+      ],
+      [t('retry'), afterAd(() => startStage(n)), canContinue],
+      [t('stages'), afterAd(showStages), true],
     ], true);
+  }
+
+  // 광고 보상: 생명이나 시간을 받고 카운트다운 후 이어서
+  function continueStage(life) {
+    const cfg = window.ADS_CONFIG || {};
+    state.continued = true;
+    if (life) {
+      restorePlayer();
+      state.lives = cfg.rewardedLife ?? 1;
+      state.invincible = 2; // 이어하자마자 맞지 않게
+    } else {
+      state.timeLeft += cfg.rewardedTime ?? 15;
+    }
+    closeModal();
+    updateHud();
+    state.phase = 'ready';
+    state.countdown = 1.2;
+    lastTime = performance.now();
+    rafId = requestAnimationFrame(loop);
   }
 
   function pause() {
@@ -451,10 +597,10 @@
     state.resumePhase = state.phase;
     state.phase = 'paused';
     cancelAnimationFrame(rafId);
-    showModal('PAUSED', '', null, [
-      ['RESUME', resume],
-      ['RETRY', () => startStage(state.n), true],
-      ['STAGES', showStages, true],
+    showModal(t('paused'), '', null, [
+      [t('resume'), resume],
+      [t('retry'), () => startStage(state.n), true],
+      [t('stages'), showStages, true],
     ]);
   }
 
@@ -480,7 +626,10 @@
       const b = document.createElement('button');
       b.textContent = label;
       if (secondary) b.className = 'secondary';
-      b.onclick = fn;
+      b.onclick = () => {
+        box.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+        fn();
+      };
       box.appendChild(b);
     });
     modal.classList.remove('hidden');
@@ -491,43 +640,77 @@
     cancelAnimationFrame(rafId);
     state = null;
     closeModal();
+    window.Demo.stop();
     gameScreen.classList.add('hidden');
+    demoScreen.classList.add('hidden');
     stageScreen.classList.remove('hidden');
+    const unlocked = (i) => i === 0 || (progress.stars[i - 1] || 0) > 0;
+    const starsOf = (i) => progress.stars[i] || 0;
+
+    // 처음 열 때는 아직 안 깬 스테이지가 있는 난이도 탭
+    if (progress.tab == null) {
+      const firstOpen = STAGES.findIndex((_, i) => unlocked(i) && !starsOf(i));
+      progress.tab = tierOf(firstOpen < 0 ? STAGES.length - 1 : firstOpen).tier;
+    }
+
+    // 난이도 탭 (앞 난이도를 다 깨야 다음 난이도 첫 스테이지가 열림)
+    const tabs = $('tierTabs');
+    tabs.innerHTML = '';
+    TIERS.forEach((tier, ti) => {
+      const start = tierStart(ti);
+      const got = tier.stages.reduce((sum, _, k) => sum + starsOf(start + k), 0);
+      const b = document.createElement('button');
+      b.className = 'tab' + (ti === progress.tab ? ' active' : '') + (unlocked(start) ? '' : ' locked');
+      b.innerHTML = `${unlocked(start) ? '' : '🔒 '}${t(`tier${tier.name}`)}<small>★ ${got}/${tier.stages.length * 3}</small>`;
+      b.onclick = () => { progress.tab = ti; showStages(); };
+      tabs.appendChild(b);
+    });
+
     const grid = $('stageGrid');
     grid.innerHTML = '';
-    let total = 0;
-    STAGES.forEach((_, i) => {
-      const stars = progress.stars[i] || 0;
-      total += stars;
-      const unlocked = i === 0 || (progress.stars[i - 1] || 0) > 0;
+    const start = tierStart(progress.tab);
+    TIERS[progress.tab].stages.forEach((_, k) => {
+      const i = start + k;
+      const stars = starsOf(i);
       const b = document.createElement('button');
-      b.className = 'stage-btn' + (unlocked ? '' : ' locked');
-      b.innerHTML = unlocked
-        ? `${i + 1}<small>${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</small>`
-        : `🔒<small>${i + 1}</small>`;
-      if (unlocked) b.onclick = () => startStage(i);
+      b.className = 'stage-btn' + (unlocked(i) ? '' : ' locked');
+      b.innerHTML = unlocked(i)
+        ? `${k + 1}<small>${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</small>`
+        : `🔒<small>${k + 1}</small>`;
+      if (unlocked(i)) b.onclick = () => startStage(i);
       grid.appendChild(b);
     });
-    $('totalStars').textContent = `★ ${total}`;
+    $('totalStars').textContent = `★ ${STAGES.reduce((sum, _, i) => sum + starsOf(i), 0)}`;
   }
 
   // ── 입력 ──
-  // 스와이프: 손을 떼지 않고 계속 끌면 여러 칸 이동
+  // 스와이프: 손을 떼지 않고 계속 끌면 여러 칸 이동 (8방향)
   // 탭: 탭한 칸 방향으로 한 칸 이동
   const SWIPE = 26;
+  // 대각선으로 인정하는 각도 (수평에서 몇 도). 끌던 방향을 조금 더 유지해서 지그재그를 줄임
+  //   처음 / 직선으로 끌던 중: 25°~65° (살짝 비스듬한 상하좌우 스와이프는 그대로 직선)
+  //   대각선으로 끌던 중:     15°~75° (손가락이 조금 흔들려도 계속 대각선)
+  const DIAGONAL_BAND = { straight: [25, 65], diagonal: [15, 75] };
+  function move8(dx, dy, wasDiagonal = false) {
+    const [min, max] = DIAGONAL_BAND[wasDiagonal ? 'diagonal' : 'straight'];
+    const angle = Math.atan2(Math.abs(dy), Math.abs(dx)) * 180 / Math.PI;
+    if (angle < min) { move(Math.sign(dx), 0); return false; }
+    if (angle > max) { move(0, Math.sign(dy)); return false; }
+    move(Math.sign(dx), Math.sign(dy));
+    return true;
+  }
   let touch = null;
   boardWrap.addEventListener('pointerdown', (e) => {
-    touch = { x: e.clientX, y: e.clientY, moved: false };
+    touch = { x: e.clientX, y: e.clientY, moved: false, diagonal: false };
     boardWrap.setPointerCapture(e.pointerId);
   });
   boardWrap.addEventListener('pointermove', (e) => {
     if (!touch) return;
     const dx = e.clientX - touch.x;
     const dy = e.clientY - touch.y;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE) return;
-    if (Math.abs(dx) > Math.abs(dy)) move(Math.sign(dx), 0);
-    else move(0, Math.sign(dy));
-    touch = { x: e.clientX, y: e.clientY, moved: true };
+    if (Math.hypot(dx, dy) < SWIPE) return;
+    const diagonal = move8(dx, dy, touch.diagonal);
+    touch = { x: e.clientX, y: e.clientY, moved: true, diagonal };
   });
   boardWrap.addEventListener('pointerup', (e) => {
     if (touch && !touch.moved && state) {
@@ -536,10 +719,7 @@
       const cy = (e.clientY - r.top) / (r.height / ROWS) - 0.5;
       const dx = cx - state.px;
       const dy = cy - state.py;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) >= 0.5) {
-        if (Math.abs(dx) > Math.abs(dy)) move(Math.sign(dx), 0);
-        else move(0, Math.sign(dy));
-      }
+      if (Math.max(Math.abs(dx), Math.abs(dy)) >= 0.5) move8(dx, dy);
     }
     touch = null;
   });
@@ -548,6 +728,7 @@
   const KEYS = {
     ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
     w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+    q: [-1, -1], e: [1, -1], z: [-1, 1], c: [1, 1], // 대각선
   };
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return; // 닉네임 입력 중
@@ -558,19 +739,63 @@
 
   $('backBtn').onclick = showStages;
   $('pauseBtn').onclick = pause;
+  $('helpBtn').onclick = showDemo;
+
+  // 언어 선택 (data-i18n 글자는 I18N.apply가 바꾸고, 스테이지 화면은 다시 그림)
+  const langBtn = $('langBtn');
+  const updateLangBtn = () => { langBtn.textContent = `🌐 ${window.I18N.LANGS[window.I18N.lang]}`; };
+  langBtn.onclick = () => {
+    showModal(t('language'), '', null, [
+      ...Object.entries(window.I18N.LANGS).map(([code, label]) => [label, () => {
+        window.I18N.setLang(code);
+        updateLangBtn();
+        showStages();
+      }, code !== window.I18N.lang]),
+      [t('close'), closeModal, true],
+    ]);
+  };
+  updateLangBtn();
+
+  // 광고 모드 전환 (TEST = 광고 없음, RELEASE = 광고 있음)
+  const modeBtn = $('modeBtn');
+  const updateModeBtn = () => {
+    const release = window.Ads.isRelease();
+    modeBtn.dataset.i18n = release ? 'adRelease' : 'adTest';
+    modeBtn.textContent = t(modeBtn.dataset.i18n);
+    modeBtn.classList.toggle('release', release);
+  };
+  modeBtn.classList.toggle('hidden', !window.Ads.showToggle);
+  modeBtn.onclick = () => { window.Ads.setMode(window.Ads.isRelease() ? 'test' : 'release'); updateModeBtn(); };
+  updateModeBtn();
   $('rankBtn').onclick = () => {
     const played = Object.keys(progress.best).map(Number);
     showRanking(played.length ? Math.max(...played) : 0);
   };
   const soundBtn = $('soundBtn');
-  const updateSoundBtn = () => { soundBtn.textContent = progress.sound ? '♪ ON' : '♪ OFF'; };
+  const updateSoundBtn = () => {
+    soundBtn.dataset.i18n = progress.sound ? 'soundOn' : 'soundOff';
+    soundBtn.textContent = t(soundBtn.dataset.i18n);
+  };
   soundBtn.onclick = () => { progress.sound = !progress.sound; save(); updateSoundBtn(); };
   updateSoundBtn();
 
   window.addEventListener('resize', () => { if (state) resizeBoard(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 
+  // ── 시연 화면 ──
+  function showDemo() {
+    stageScreen.classList.add('hidden');
+    gameScreen.classList.add('hidden');
+    demoScreen.classList.remove('hidden');
+    window.Demo.start(() => {
+      progress.seenDemo = true;
+      save();
+      showStages();
+    });
+  }
+
   buildBoard();
-  showStages();
+  if (progress.seenDemo) showStages();
+  else showDemo(); // 처음 실행이면 규칙 시연부터
   window.cloud?.start(JSON.parse(JSON.stringify(progress)), applyCloudProgress);
 })();

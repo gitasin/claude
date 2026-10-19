@@ -33,7 +33,8 @@ body {
 
 .app {
   max-width: 480px;
-  height: 100dvh;
+  height: 100vh;   /* dvh를 모르는 옛날 브라우저용 */
+  height: 100dvh;  /* 폰 주소창·툴바를 뺀 실제 보이는 높이 */
   margin: 0 auto;
   padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom));
   display: flex;
@@ -68,7 +69,7 @@ button.small { padding: 8px 14px; font-size: 13px; align-self: center; }
   min-width: 72px;
 }
 .box label { display: block; font-size: 10px; color: var(--muted); letter-spacing: 0.15em; }
-.box b { font-size: 20px; }
+.box b { font-size: 20px; white-space: nowrap; }
 
 /* ── 스테이지 선택 ── */
 header {
@@ -79,19 +80,36 @@ header {
 }
 h1 {
   margin: 0;
-  font-size: 30px;
-  letter-spacing: 0.08em;
+  font-size: 26px;
+  letter-spacing: 0.06em;
   color: var(--cyan);
   text-shadow: 0 0 12px rgba(45, 226, 255, 0.7);
 }
 h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margin-left: 4px; }
 
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.tab {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 4px; font-size: 13px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: none; color: var(--muted);
+}
+.tab small { font-size: 10px; color: #ffd84a; font-weight: 400; }
+.tab.active { color: var(--text); border-color: var(--cyan); box-shadow: 0 0 10px rgba(45, 226, 255, 0.35); }
+.tab.locked small { color: var(--muted); }
+
+/* 화면이 짧으면 스테이지 목록만 스크롤되고 아래 범례·버튼은 항상 보이게 */
 .stage-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  align-content: start;
   gap: 10px;
+  flex: 0 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  padding: 2px;
+  scrollbar-width: none;
 }
+.stage-grid::-webkit-scrollbar { display: none; }
 .stage-btn {
   aspect-ratio: 1;
   display: flex;
@@ -113,8 +131,9 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
   display: flex;
   justify-content: center;
   gap: 22px;
-  margin: auto 0 16px;
-  padding-top: 20px;
+  margin: auto 0 14px;
+  padding-top: 16px;
+  flex-shrink: 0;
 }
 .legend div { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); letter-spacing: 0.1em; }
 .legend .tile { display: block; width: 34px; height: 34px; border-radius: 6px; }
@@ -165,10 +184,12 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
 }
 .cell.hole::before { background: transparent; border-color: transparent; }
 .cell.blue::before { background: var(--blue); border-color: #7fb0ff; box-shadow: 0 0 14px rgba(47, 123, 255, 0.8); }
+.cell.blue.moving::before { animation: warn 0.12s infinite alternate; }
 .cell.done::before { background: #142046; border-color: #24366e; }
 .cell.green::before { background: rgba(43, 255, 136, 0.85); border-color: #a5ffcc; box-shadow: 0 0 14px rgba(43, 255, 136, 0.7); }
 .cell.warn::before { background: rgba(255, 45, 85, 0.25); border-color: rgba(255, 45, 85, 0.6); animation: warn 0.25s infinite alternate; }
 .cell.red::before { background: var(--red); border-color: #ff9bb0; box-shadow: 0 0 16px rgba(255, 45, 85, 0.9); }
+.cell.pop { z-index: 1; } /* 반짝 테두리가 옆 칸에 가려지지 않게 */
 .cell.pop::after {
   content: "";
   position: absolute;
@@ -179,25 +200,105 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
   pointer-events: none;
 }
 
+/* ── 육각형 플레이어 ──
+   .player       = 칸 이동 (translate)
+     ::before    = 바닥 그림자 (회전 안 함)
+     .hex        = 몸체 + 금. 한 칸마다 60°씩 굴러감 (--rot, game.js가 지정)
+                   빛 효과(filter)를 이 층에 두고 will-change로 GPU가 통째로 돌림 → 구를 때 다시 그리지 않음
+     ::after     = 고정 조명 (왼쪽 위). 육각형은 60° 대칭이라 다 구르면 모양이 딱 겹침
+   이동과 회전은 같은 시간·같은 곡선 → 칸에 도착하는 순간 회전도 끝남 */
 .player {
+  --move: 0.15s;
+  --ease: cubic-bezier(0.25, 0.8, 0.35, 1);
+  --glow: drop-shadow(0 0 1px rgba(8, 20, 40, 0.9)) drop-shadow(0 0 5px rgba(45, 226, 255, 0.85));
   position: absolute;
   left: 0;
   top: 0;
   width: calc(100% / var(--cols));
   height: calc(100% / var(--rows));
-  transition: transform 0.08s ease-out;
+  transition: transform var(--move) var(--ease);
+  will-change: transform;
   pointer-events: none;
   z-index: 2;
 }
+.player.diag { --move: 0.19s; } /* 대각선은 거리가 길어서 조금 더 길게 */
 .player::before {
   content: "";
   position: absolute;
-  inset: 22%;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 0 3px var(--cyan), 0 0 18px var(--cyan);
+  inset: 22% 20% 12%;
+  background: radial-gradient(ellipse at 50% 62%, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 65%);
 }
+.player .hex {
+  position: absolute;
+  inset: 18%;
+  filter: var(--glow);
+  transform: rotate(var(--rot, 0deg));
+  transition: transform var(--move) var(--ease);
+  will-change: transform;
+}
+.player .hex::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%);
+  /* 6개 옆면(살짝 다른 밝기) + 가운데 윗면 */
+  background:
+    radial-gradient(circle, #ffffff 0 29%, rgba(255, 255, 255, 0.35) 30%, transparent 32%),
+    conic-gradient(from -30deg, #eef5fa 0 60deg, #b4c7d6 60deg 120deg, #d6e3ec 120deg 180deg,
+      #a3b8c9 180deg 240deg, #cddbe6 240deg 300deg, #bccdda 300deg 360deg);
+}
+.player::after {
+  content: "";
+  position: absolute;
+  inset: 18%;
+  clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 42%, rgba(8, 24, 52, 0.55) 100%);
+}
+/* 구르는 중간에 살짝 커졌다 돌아옴 → 모서리를 딛고 넘어가는 느낌 */
+.player.rolling .hex { animation: roll var(--move) var(--ease); }
 .player.invincible { animation: blink 0.15s infinite alternate; }
+
+/* 금: 생명이 줄 때마다 늘어남 (data-crack = 잃은 생명 수). .hex 안에 있어서 같이 굴러감 */
+.player .crack {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%);
+}
+/* 금 선: 틈의 그림자(core) + 살짝 비껴서 빛 반사(glint). 굵기는 crack.js가 마디마다 지정 */
+.player .crack .core path,
+.player .crack .glint path { fill: none; stroke-linecap: round; }
+.player .crack .core path { stroke: rgba(14, 26, 42, 0.9); }
+.player .crack .glint path { stroke: rgba(255, 255, 255, 0.8); transform: translate(0.7px, 0.7px); }
+.player .crack .pit { fill: rgba(14, 26, 42, 0.85); }
+.player .crack .pit-ring { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 0.7; }
+.player .crack > g { opacity: 0; transition: opacity 0.1s; } /* 단계 묶음(c1, c2)만 */
+.player[data-crack="1"] .c1,
+.player[data-crack="2"] .c1,
+.player[data-crack="2"] .c2 { opacity: 1; }
+.player.crack-flash .hex::before,
+.player.crack-flash .crack { animation: crack-flash 0.35s ease-out; }
+
+/* 깨짐: 몸체는 숨기고 조각이 흩어짐 */
+.player.shatter { animation: none; filter: drop-shadow(0 0 4px rgba(45, 226, 255, 0.8)); } /* 무적 깜빡임이 조각에 걸리지 않게 */
+.player.shatter::before,
+.player.shatter::after,
+.player.shatter .hex { opacity: 0; }
+.player .shard {
+  position: absolute;
+  inset: 18%;
+  animation: shard var(--dur, 0.8s) cubic-bezier(0.15, 0.6, 0.35, 1) forwards;
+}
+
+@keyframes roll { 0% { scale: 1; } 50% { scale: 1.07; } 100% { scale: 1; } }
+@keyframes crack-flash { 0% { filter: brightness(2.2); } 100% { filter: brightness(1); } }
+/* 바깥으로 튀었다가 중력처럼 아래로 떨어지며 사라짐 */
+@keyframes shard {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  45% { transform: translate(calc(var(--dx) * 0.75), calc(var(--dy) * 0.75)) rotate(calc(var(--r) * 0.5)) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), calc(var(--dy) + var(--fall))) rotate(var(--r)) scale(0.8); opacity: 0; }
+}
 
 .countdown {
   position: absolute;
@@ -214,6 +315,58 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
 }
 
 .hint { text-align: center; color: var(--muted); font-size: 12px; letter-spacing: 0.2em; margin: 10px 0 0; }
+
+/* ── 시연 화면 ── */
+.demo-caption { text-align: center; margin: 18px 0 6px; min-height: 64px; }
+.demo-caption b { display: block; font-size: 24px; letter-spacing: 0.1em; color: var(--cyan); text-shadow: 0 0 10px rgba(45, 226, 255, 0.6); }
+.demo-caption span { display: block; margin-top: 6px; color: var(--muted); font-size: 14px; }
+.demo-hud { display: flex; justify-content: center; gap: 18px; min-height: 22px; font-weight: 700; letter-spacing: 0.1em; }
+.demo-timer { width: min(78vw, 300px); margin: 6px auto 0; }
+.demo-timer #demoTimeFill { height: 100%; width: 100%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); transition: width 1.4s linear; }
+.demo-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; }
+.demo-board { --cols: 5; --rows: 5; width: min(78vw, 300px, 42dvh); height: min(78vw, 300px, 42dvh); }
+.swipe {
+  position: absolute; left: 0; top: 0;
+  width: calc(100% / var(--cols)); height: calc(100% / var(--rows));
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 3;
+}
+.swipe span { font-size: 30px; color: #fff; text-shadow: 0 0 10px var(--cyan); opacity: 0; }
+.swipe.show span { animation: swipe 0.45s ease-out; }
+.demo-badge {
+  position: absolute; font-size: 44px; font-weight: 900; letter-spacing: 0.08em;
+  pointer-events: none; z-index: 4; animation: badge 0.9s ease-out forwards;
+}
+.demo-badge.good { color: var(--green); text-shadow: 0 0 18px var(--green); }
+.demo-badge.bad { color: var(--red); text-shadow: 0 0 18px var(--red); }
+.demo-badge.stars { color: #ffd84a; text-shadow: 0 0 18px #ffd84a; }
+.demo-dots { display: flex; justify-content: center; gap: 8px; margin: 14px 0; }
+.demo-dots .dot { width: 10px; height: 10px; padding: 0; border-radius: 50%; background: var(--line); box-shadow: none; }
+.demo-dots .dot.active { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+.demo-nav { display: flex; gap: 10px; align-items: center; }
+.demo-nav #demoStart { flex: 1; height: 48px; }
+#demoStart.pulse { animation: pulse 0.9s infinite alternate; }
+
+@keyframes swipe { from { opacity: 0.9; transform: translateX(-30%); } to { opacity: 0; transform: translateX(60%); } }
+@keyframes badge { 0% { transform: scale(0.6); opacity: 0; } 20% { transform: scale(1.1); opacity: 1; } 80% { opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes pulse { from { box-shadow: 0 0 6px rgba(47, 123, 255, 0.5); } to { box-shadow: 0 0 22px rgba(47, 123, 255, 1); } }
+
+/* ── 광고 ── */
+/* 메인 화면은 내용이 넘치면 스크롤 (폰 툴바에 가려도 내려서 볼 수 있게) */
+#stageScreen { overflow-y: auto; }
+.mode-row { display: flex; justify-content: space-between; gap: 8px; margin: -10px 0 10px; flex-shrink: 0; }
+.mode-row .lang { font-size: 12px; padding: 8px 12px; }
+.mode-row .mode { font-size: 12px; padding: 8px 12px; letter-spacing: 0.06em; color: var(--cyan); border-color: var(--cyan); }
+.mode-row .mode.release { color: #ffd84a; border-color: #ffd84a; }
+.ad-overlay {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  background: #000;
+}
+.ad-box { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.ad-box small { color: var(--muted); letter-spacing: 0.3em; font-size: 11px; }
+.ad-box b { font-size: 26px; letter-spacing: 0.15em; color: #ffd84a; }
+.ad-count { font-size: 56px; font-weight: 900; color: #fff; min-height: 68px; }
 
 /* ── 모달 ── */
 .modal {
@@ -241,7 +394,7 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
 .panel p { color: var(--muted); margin: 8px 0 18px; }
 .header-right { display: flex; align-items: center; gap: 8px; }
 button:disabled { opacity: 0.3; }
-.footer { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 14px; flex-shrink: 0; }
 .footer a { color: var(--muted); font-size: 11px; letter-spacing: 0.15em; text-decoration: none; }
 
 /* ── 랭킹 ── */
@@ -277,3 +430,49 @@ button:disabled { opacity: 0.3; }
   25% { transform: translateX(-6px); }
   75% { transform: translateX(6px); }
 }
+
+/* 한글·한자·가나는 영어용 넓은 글자 간격을 줄임 */
+html:not([lang="en"]) .footer a,
+html:not([lang="en"]) .legend span,
+html:not([lang="en"]) .stage-name,
+html:not([lang="en"]) .hint,
+html:not([lang="en"]) .box label,
+html:not([lang="en"]) .demo-caption b,
+html:not([lang="en"]) .panel h2 { letter-spacing: 0.03em; }
+
+/* ── LED 바닥 패널 스타일 (실제 매장 바닥처럼) ──
+   옅은 검은색 프레임 + 선명한 원색 패널. 이전 스타일로 돌아가려면 이 블록만 지우면 됨 */
+:root { --frame: #24272f; }                              /* 패널 테두리·프레임 (옅은 검정) */
+.board {
+  background: var(--frame);
+  box-shadow: 0 0 0 4px var(--frame), 0 8px 24px rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+}
+.cell::before {
+  inset: 1px;
+  border-radius: 2px;
+  border: 2px solid var(--frame);
+  background: #0c0e15;                                   /* 꺼진 패널 */
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.6);
+}
+.cell.hole::before { background: #030305; box-shadow: inset 0 0 10px #000; }
+/* 켜진 패널: 선명한 원색 + 가운데만 아주 살짝 밝게 */
+.cell.blue::before {
+  background: radial-gradient(circle, #4a8dff 0%, #2f7bff 60%, #2a72f0 100%);
+  border-color: var(--frame);
+  box-shadow: 0 0 14px rgba(47, 123, 255, 0.75);
+}
+.cell.done::before { background: #111a38; border-color: var(--frame); box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.5); }
+.cell.green::before {
+  background: radial-gradient(circle, #4dff9c 0%, #22f07e 60%, #1fe076 100%);
+  border-color: var(--frame);
+  box-shadow: 0 0 14px rgba(43, 255, 136, 0.6);
+}
+.cell.red::before {
+  background: radial-gradient(circle, #ff4a6d 0%, #ff2d55 60%, #f0264d 100%);
+  border-color: var(--frame);
+  box-shadow: 0 0 16px rgba(255, 45, 85, 0.8);
+}
+.cell.warn::before { background: #3a0c18; border-color: var(--frame); box-shadow: inset 0 0 10px rgba(255, 45, 85, 0.55); }
+.cell.pop::after { inset: 1px; border-radius: 2px; }
+.legend .tile { border-radius: 3px; border: 2px solid var(--frame); }

@@ -1,5 +1,7 @@
 // 스테이지 데이터 (판 크기: 가로 6 × 세로 8)
 // - time: 제한 시간 (초)
+// - shuffle: 남은 파랑을 다른 칸으로 옮기는 주기 (초). 생략하면 5, 0이면 안 옮김
+//     [최소, 최대]로 주면 매번 그 사이에서 랜덤 (예: [3, 7])
 // - map: 판 모양 (위→아래)
 //     '.' = 빈 바닥, 'B' = 파랑 (밟아서 모두 끄기), 'G' = 초록 (안전지대, 빨강이 못 들어옴)
 //     '#' = 구멍 (못 밟음), 'P' = 시작 위치
@@ -10,9 +12,10 @@
 //     { type: 'chase', x, y, speed }           플레이어를 쫓아옴 (초록 위에 있으면 배회)
 //     { type: 'sweep', axis: 'row'|'col', pos, dir, speed }  한 줄 전체가 쓸고 지나감 (초록은 안전)
 //   speed = 초당 이동 칸 수
-const STAGES = [
+// ── 초급 (EASY) ──
+const EASY = [
   {
-    time: 30,
+    time: 40,
     map: [
       '......',
       '.B..B.',
@@ -21,12 +24,14 @@ const STAGES = [
       '......',
       '.B..B.',
       '......',
-      '..P...',
+      'G.P...',
     ],
-    hazards: [],
+    hazards: [
+      { type: 'bounce', x: 5, y: 4, dx: -1, dy: 0, speed: 1.5 },
+    ],
   },
   {
-    time: 30,
+    time: 40,
     map: [
       '.B..B.',
       '......',
@@ -35,12 +40,16 @@ const STAGES = [
       'B....B',
       '......',
       '.B..B.',
-      '..P...',
+      '..P..G',
     ],
-    hazards: [{ type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 2.5 }],
+    hazards: [
+      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 5, y: 5, dx: -1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 3, y: 0, dx: 0, dy: 1, speed: 2 },
+    ],
   },
   {
-    time: 35,
+    time: 45,
     map: [
       'B.BB.B',
       '......',
@@ -54,10 +63,11 @@ const STAGES = [
     hazards: [
       { type: 'bounce', x: 1, y: 2, dx: 1, dy: 0, speed: 3 },
       { type: 'bounce', x: 4, y: 5, dx: -1, dy: 0, speed: 3 },
+      { type: 'bounce', x: 3, y: 0, dx: 0, dy: 1, speed: 2 },
     ],
   },
   {
-    time: 40,
+    time: 50,
     map: [
       'B..B.B',
       '.#..#.',
@@ -66,16 +76,17 @@ const STAGES = [
       'B....B',
       '.#..#.',
       'B.BB.B',
-      '..P...',
+      'G.P...',
     ],
     hazards: [
       { type: 'bounce', x: 0, y: 0, dx: 0, dy: 1, speed: 2.5 },
       { type: 'bounce', x: 5, y: 7, dx: 0, dy: -1, speed: 2.5 },
       { type: 'bounce', x: 1, y: 2, dx: 1, dy: 0, speed: 2 },
+      { type: 'bounce', x: 2, y: 4, dx: 1, dy: 1, speed: 2 },
     ],
   },
   {
-    time: 40,
+    time: 50,
     map: [
       'B.aa.B',
       '.b..b.',
@@ -84,13 +95,15 @@ const STAGES = [
       'b.BB.b',
       '.a..a.',
       'B.bb.B',
-      '..P...',
+      'G.P...',
     ],
     blink: { period: 3, warn: 0.7 },
-    hazards: [],
+    hazards: [
+      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 2 },
+    ],
   },
   {
-    time: 45,
+    time: 55,
     map: [
       'BB..BB',
       'G....G',
@@ -101,10 +114,13 @@ const STAGES = [
       'BB..BB',
       'G.P..G',
     ],
-    hazards: [{ type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.2 }],
+    hazards: [
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'bounce', x: 0, y: 2, dx: 1, dy: 0, speed: 2 },
+    ],
   },
   {
-    time: 40,
+    time: 50,
     map: [
       'B....B',
       '..B...',
@@ -115,10 +131,14 @@ const STAGES = [
       'B...B.',
       '..P...',
     ],
-    hazards: [{ type: 'chase', x: 2, y: 0, speed: 1.6 }],
+    hazards: [
+      { type: 'chase', x: 2, y: 0, speed: 1.6 },
+      { type: 'bounce', x: 0, y: 4, dx: 1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 5, y: 1, dx: 0, dy: 1, speed: 2 },
+    ],
   },
   {
-    time: 40,
+    time: 50,
     map: [
       'B.B..B',
       '......',
@@ -127,15 +147,16 @@ const STAGES = [
       '..BB..',
       '.B..B.',
       '......',
-      'B.P.BB',
+      'BGP.BB',
     ],
     hazards: [
       { type: 'bounce', x: 0, y: 1, dx: 1, dy: 1, speed: 2.5 },
       { type: 'bounce', x: 5, y: 4, dx: -1, dy: -1, speed: 2.5 },
+      { type: 'bounce', x: 0, y: 6, dx: 1, dy: 0, speed: 3 },
     ],
   },
   {
-    time: 45,
+    time: 55,
     map: [
       'BabbaB',
       'a....b',
@@ -150,10 +171,11 @@ const STAGES = [
     hazards: [
       { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 2 },
       { type: 'bounce', x: 4, y: 5, dx: -1, dy: 0, speed: 2 },
+      { type: 'bounce', x: 0, y: 3, dx: 0, dy: 1, speed: 2 },
     ],
   },
   {
-    time: 50,
+    time: 60,
     map: [
       'BG..GB',
       'B....B',
@@ -167,10 +189,11 @@ const STAGES = [
     hazards: [
       { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1 },
       { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 5, y: 0, dx: 0, dy: 1, speed: 2 },
     ],
   },
   {
-    time: 50,
+    time: 60,
     map: [
       'BaBbBa',
       'b....b',
@@ -182,10 +205,13 @@ const STAGES = [
       'B.P.bB',
     ],
     blink: { period: 3, warn: 0.7 },
-    hazards: [{ type: 'chase', x: 1, y: 1, speed: 1.4 }],
+    hazards: [
+      { type: 'chase', x: 1, y: 1, speed: 1.4 },
+      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 2.5 },
+    ],
   },
   {
-    time: 60,
+    time: 70,
     map: [
       'BGaaGB',
       'b.BB.b',
@@ -201,6 +227,493 @@ const STAGES = [
       { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 0.9 },
       { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 2.5 },
       { type: 'chase', x: 5, y: 7, speed: 1.2 },
+      { type: 'bounce', x: 1, y: 5, dx: 1, dy: 0, speed: 2.5 },
     ],
   },
 ];
+
+// ── 중급 (NORMAL): 빨강이 더 빠르고 많음, 파랑 이동 타이밍 랜덤 3~7초 ──
+const NORMAL = [
+  {
+    time: 50,
+    shuffle: [3, 7],
+    map: [
+      'B.B..B',
+      '..G...',
+      'B....B',
+      '.B..B.',
+      '......',
+      'B..G.B',
+      '.B..B.',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'bounce', x: 1, y: 2, dx: 1, dy: 0, speed: 3 },
+      { type: 'bounce', x: 0, y: 4, dx: 1, dy: 0, speed: 3 },
+      { type: 'bounce', x: 4, y: 0, dx: 0, dy: 1, speed: 2.5 },
+    ],
+  },
+  {
+    time: 50,
+    shuffle: [3, 7],
+    map: [
+      'B..#.B',
+      '.B....',
+      '..G.B.',
+      '#.B..#',
+      '.B..B.',
+      '..B.G.',
+      'B....B',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'bounce', x: 1, y: 0, dx: 1, dy: 1, speed: 3 },
+      { type: 'bounce', x: 4, y: 1, dx: -1, dy: 1, speed: 3 },
+      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 3 },
+    ],
+  },
+  {
+    time: 55,
+    shuffle: [3, 7],
+    map: [
+      'BabaBa',
+      'b....b',
+      'a.BG.a',
+      'b.B..b',
+      'a..B.a',
+      'b.GB.b',
+      'BbabaB',
+      '..P...',
+    ],
+    blink: { period: 2.2, warn: 0.5 },
+    hazards: [
+      { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 4, y: 1, dx: 0, dy: 1, speed: 2 },
+    ],
+  },
+  {
+    time: 55,
+    shuffle: [3, 7],
+    map: [
+      'BG..GB',
+      '..B...',
+      'B.GG.B',
+      '..B.B.',
+      '.B....',
+      'B.GG.B',
+      '.B..B.',
+      'G.P..G',
+    ],
+    hazards: [
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'chase', x: 5, y: 2, speed: 1.5 },
+    ],
+  },
+  {
+    time: 55,
+    shuffle: [3, 7],
+    map: [
+      'B.GB.B',
+      '.B...G',
+      'G..B..',
+      '.B..BG',
+      'B..G..',
+      '.GB..B',
+      'B...G.',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'bounce', x: 1, y: 0, dx: 0, dy: 1, speed: 2.5 },
+      { type: 'bounce', x: 4, y: 5, dx: 0, dy: -1, speed: 2.5 },
+    ],
+  },
+  {
+    time: 55,
+    shuffle: [3, 7],
+    map: [
+      'B....B',
+      '.B.G..',
+      '...B..',
+      'B.#..B',
+      '..B#.G',
+      '.G...B',
+      'B..B..',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'chase', x: 0, y: 0, speed: 1.5 },
+      { type: 'chase', x: 5, y: 1, speed: 1.3 },
+    ],
+  },
+  {
+    time: 55,
+    shuffle: [3, 7],
+    map: [
+      'B.B.B.',
+      '......',
+      '.B.B.B',
+      'G.....',
+      'B.B.B.',
+      '.....G',
+      '.B.B.B',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 0, speed: 3.5 },
+      { type: 'bounce', x: 5, y: 3, dx: -1, dy: 0, speed: 3.5 },
+      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 3.5 },
+      { type: 'bounce', x: 2, y: 0, dx: 0, dy: 1, speed: 2 },
+    ],
+  },
+  {
+    time: 55,
+    shuffle: [3, 7],
+    map: [
+      'BaBaBa',
+      'a.G..b',
+      'b.ab.B',
+      'B.ba.a',
+      'a.Bb.b',
+      'b..G.B',
+      'aBbaBb',
+      '..P...',
+    ],
+    blink: { period: 2.6, warn: 0.6 },
+    hazards: [
+      { type: 'chase', x: 5, y: 5, speed: 1.6 },
+      { type: 'bounce', x: 3, y: 1, dx: 1, dy: 0, speed: 2.5 },
+    ],
+  },
+  {
+    time: 60,
+    shuffle: [3, 7],
+    map: [
+      'B.G..B',
+      '..B.G.',
+      'G..B..',
+      '.B..B.',
+      '..G..G',
+      'B..B..',
+      '.G..B.',
+      'B.P..G',
+    ],
+    hazards: [
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 0.9 },
+      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 0.9 },
+    ],
+  },
+  {
+    time: 55,
+    shuffle: [3, 7],
+    map: [
+      'B.#B.B',
+      '..#..#',
+      'B...B.',
+      '##.G.#',
+      'B.B..B',
+      '.#..#.',
+      'BG.B.B',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'bounce', x: 1, y: 2, dx: 1, dy: 0, speed: 3 },
+      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 3 },
+      { type: 'bounce', x: 4, y: 0, dx: 0, dy: 1, speed: 2.5 },
+    ],
+  },
+  {
+    time: 60,
+    shuffle: [3, 7],
+    map: [
+      'BbBaBb',
+      'a....a',
+      'B.GG.B',
+      'b.BB.b',
+      'a....a',
+      'B.GG.B',
+      'bBabBa',
+      '..P...',
+    ],
+    blink: { period: 2.4, warn: 0.6 },
+    hazards: [
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.1 },
+      { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 3 },
+      { type: 'bounce', x: 4, y: 4, dx: -1, dy: 0, speed: 3 },
+    ],
+  },
+  {
+    time: 65,
+    shuffle: [3, 7],
+    map: [
+      'BGB.BG',
+      '.#..#.',
+      'B.aB.B',
+      '.bGGa.',
+      'B.bB.B',
+      '.#..#.',
+      'GB.aBG',
+      '..P...',
+    ],
+    blink: { period: 2.6, warn: 0.6 },
+    hazards: [
+      { type: 'chase', x: 3, y: 0, speed: 1.6 },
+      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 3 },
+      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 1, speed: 3 },
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1 },
+    ],
+  },
+];
+
+// ── 고급 (HARD): 빠른 빨강·추격자 여럿·가로세로 쓸기, 파랑 이동 타이밍 랜덤 2~5초 ──
+const HARD = [
+  {
+    time: 55,
+    shuffle: [2, 5],
+    map: [
+      'B.B.BB',
+      '.G....',
+      'B.B.B.',
+      '......',
+      '.B.B.B',
+      '....G.',
+      'BB.B.B',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'bounce', x: 2, y: 1, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 5, y: 0, dx: 0, dy: 1, speed: 3 },
+      { type: 'bounce', x: 0, y: 0, dx: 0, dy: 1, speed: 3 },
+    ],
+  },
+  {
+    time: 55,
+    shuffle: [2, 5],
+    map: [
+      'B..B.B',
+      '.B..G.',
+      'B.B..B',
+      '..#B..',
+      'B..#.B',
+      '.G..B.',
+      'B.B..B',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'chase', x: 0, y: 0, speed: 1.9 },
+      { type: 'chase', x: 5, y: 0, speed: 1.7 },
+      { type: 'bounce', x: 1, y: 2, dx: 1, dy: 1, speed: 3.5 },
+    ],
+  },
+  {
+    time: 60,
+    shuffle: [2, 5],
+    map: [
+      'BabBab',
+      'ba.ab.',
+      'aBG.Ba',
+      'b.ab.b',
+      'aBb.Ba',
+      'b.abG.',
+      'BabBab',
+      '..P...',
+    ],
+    blink: { period: 1.8, warn: 0.45 },
+    hazards: [
+      { type: 'bounce', x: 5, y: 7, dx: -1, dy: 0, speed: 3 },
+      { type: 'bounce', x: 3, y: 0, dx: 0, dy: 1, speed: 3 },
+    ],
+  },
+  {
+    time: 60,
+    shuffle: [2, 5],
+    map: [
+      'BG.B.B',
+      '.B..G.',
+      'B.G..B',
+      '.B.B.G',
+      'G..B..',
+      '.B.G.B',
+      'B.B..G',
+      'G.P...',
+    ],
+    hazards: [
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.3 },
+      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1.1 },
+      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 3.5 },
+    ],
+  },
+  {
+    time: 60,
+    shuffle: [2, 5],
+    map: [
+      'B.B.GB',
+      '.B.B..',
+      'G..B.B',
+      'B.B..G',
+      '.B.B.B',
+      'G...B.',
+      'B.GB.B',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.3 },
+      { type: 'chase', x: 5, y: 0, speed: 1.9 },
+      { type: 'bounce', x: 1, y: 5, dx: 1, dy: 0, speed: 3.5 },
+    ],
+  },
+  {
+    time: 60,
+    shuffle: [2, 5],
+    map: [
+      'B.#B.B',
+      '.B#.G.',
+      'B...#B',
+      '.#B...',
+      'B..#.B',
+      'G.B.#.',
+      'B.#.B.',
+      '..P..B',
+    ],
+    hazards: [
+      { type: 'chase', x: 5, y: 0, speed: 1.8 },
+      { type: 'chase', x: 0, y: 2, speed: 1.6 },
+      { type: 'bounce', x: 3, y: 3, dx: 1, dy: 0, speed: 3.5 },
+    ],
+  },
+  {
+    time: 60,
+    shuffle: [2, 5],
+    map: [
+      'BB..BB',
+      '......',
+      'B.GB.B',
+      '......',
+      'B.BG.B',
+      '......',
+      'BB..BB',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 0, speed: 4.5 },
+      { type: 'bounce', x: 5, y: 3, dx: -1, dy: 0, speed: 4.5 },
+      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 4.5 },
+      { type: 'bounce', x: 1, y: 2, dx: 0, dy: 1, speed: 3 },
+      { type: 'bounce', x: 4, y: 4, dx: 0, dy: -1, speed: 3 },
+      { type: 'bounce', x: 2, y: 5, dx: 1, dy: -1, speed: 3.5 },
+    ],
+  },
+  {
+    time: 65,
+    shuffle: [2, 5],
+    map: [
+      'BaBbBa',
+      'b.G..b',
+      'aB..Ba',
+      'b.ab.b',
+      'aB..Ba',
+      'b..G.b',
+      'BaBbBa',
+      '..P...',
+    ],
+    blink: { period: 2, warn: 0.45 },
+    hazards: [
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'chase', x: 3, y: 2, speed: 1.8 },
+    ],
+  },
+  {
+    time: 60,
+    shuffle: [2, 5],
+    map: [
+      'B.B.B.',
+      '.G...B',
+      'B..B..',
+      '..B..B',
+      'B..B..',
+      '.B...G',
+      '..B.B.',
+      'B.P..B',
+    ],
+    hazards: [
+      { type: 'bounce', x: 1, y: 0, dx: 1, dy: 1, speed: 4 },
+      { type: 'bounce', x: 4, y: 0, dx: -1, dy: 1, speed: 4 },
+      { type: 'bounce', x: 0, y: 5, dx: 1, dy: -1, speed: 4 },
+      { type: 'bounce', x: 5, y: 3, dx: -1, dy: 1, speed: 3.5 },
+      { type: 'chase', x: 5, y: 6, speed: 1.5 },
+    ],
+  },
+  {
+    time: 65,
+    shuffle: [2, 5],
+    map: [
+      'BGaB.B',
+      '.b..Gb',
+      'B.Ba.B',
+      'aG..bB',
+      'B.bB.a',
+      '.B..G.',
+      'BaB.bB',
+      'G.P...',
+    ],
+    blink: { period: 2, warn: 0.45 },
+    hazards: [
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1 },
+      { type: 'chase', x: 3, y: 0, speed: 1.7 },
+    ],
+  },
+  {
+    time: 65,
+    shuffle: [2, 5],
+    map: [
+      'B#B.B#',
+      '.B..B.',
+      'B.G#.B',
+      '.B..B.',
+      '#.BG.#',
+      'B.B..B',
+      '.B#.B.',
+      '..P...',
+    ],
+    hazards: [
+      { type: 'chase', x: 0, y: 1, speed: 2 },
+      { type: 'chase', x: 5, y: 1, speed: 1.8 },
+      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 1, y: 5, dx: 1, dy: 0, speed: 4 },
+    ],
+  },
+  {
+    time: 70,
+    shuffle: [2, 5],
+    map: [
+      'BGBaBG',
+      'b.#..b',
+      'B.aB.B',
+      '.bGGb.',
+      'B.bB.B',
+      'a.#..a',
+      'GBaBbG',
+      '..P...',
+    ],
+    blink: { period: 1.8, warn: 0.45 },
+    hazards: [
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.3 },
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.1 },
+      { type: 'chase', x: 4, y: 2, speed: 2 },
+      { type: 'bounce', x: 3, y: 1, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 3, y: 5, dx: 1, dy: 0, speed: 4 },
+    ],
+  },
+];
+
+// 난이도 구간 (스테이지 번호는 0부터 이어짐: 초급 0~11, 중급 12~23, 고급 24~35)
+const TIERS = [
+  { name: 'EASY', stages: EASY },
+  { name: 'NORMAL', stages: NORMAL },
+  { name: 'HARD', stages: HARD },
+];
+const STAGES = TIERS.flatMap((t) => t.stages);

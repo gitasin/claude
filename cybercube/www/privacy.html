@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cyber Cube - Privacy Policy</title>
+  <title>Cube Clean - Privacy Policy</title>
   <style>
     body {
       margin: 0;
@@ -12,47 +12,215 @@
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       line-height: 1.6;
     }
-    main { max-width: 680px; margin: 0 auto; padding: 32px 16px 48px; }
-    h1 { margin: 0 0 4px; font-size: 28px; }
+    main { max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { margin: 0 0 4px; font-size: 26px; }
     h2 { margin: 28px 0 8px; font-size: 18px; color: #2de2ff; }
     p, li { color: #c4c8f0; }
     .date { color: #8d92c4; font-size: 14px; }
     a { color: #9d97ff; }
+    .langs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .langs button {
+      font: inherit; font-size: 14px; color: #c4c8f0; cursor: pointer;
+      background: #10121f; border: 1px solid #1f2440; border-radius: 8px; padding: 6px 12px;
+    }
+    .langs button[aria-pressed="true"] { color: #fff; border-color: #2de2ff; }
+    .back { display: inline-block; margin-top: 32px; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Cyber Cube — Privacy Policy</h1>
-    <p class="date">Last updated: October 19, 2026</p>
+    <!-- 언어: ?lang=ko 같은 주소 → 게임에서 고른 언어 → 기기 언어 → 영어 순 -->
+    <nav class="langs" aria-label="Language">
+      <button data-lang="ko">한국어</button>
+      <button data-lang="en">English</button>
+      <button data-lang="zh-TW">繁體中文</button>
+      <button data-lang="ja">日本語</button>
+    </nav>
 
-    <p>Cyber Cube ("the game") is an action puzzle game. This page explains what data the game uses and why.</p>
+    <!-- ── English ── -->
+    <article lang="en" hidden>
+      <h1>Cube Clean — Privacy Policy</h1>
+      <p class="date">Last updated: October 19, 2026</p>
 
-    <h2>What we collect</h2>
-    <ul>
-      <li><b>Game progress</b>: stars and best clear times for each stage.</li>
-      <li><b>Leaderboard records</b>: your best clear time for each stage and the nickname you choose. A random nickname (such as PLAYER1234) is used until you change it.</li>
-      <li><b>An anonymous player ID</b>: a random ID created automatically when you first open the game. It is not linked to your name, email, phone number or any account.</li>
-    </ul>
-    <p>Please do not use your real name or other personal information as your nickname. We do not collect your email address, contacts, location, photos or any other personal information. The game has no ads and no in-app purchases.</p>
+      <p>Cube Clean ("the game") is an action puzzle game. This page explains what data the game uses and why.</p>
 
-    <h2>How we use it</h2>
-    <p>Your game progress is saved on your device and backed up to our cloud storage so that you do not lose it. It is used only to run the game.</p>
-    <p>Leaderboard records (nickname and clear time) are <b>public</b>: other players can see them in the game's ranking screen.</p>
+      <h2>What we collect</h2>
+      <ul>
+        <li><b>Game progress</b>: stars and best clear times for each stage.</li>
+        <li><b>Leaderboard records</b>: your best clear time for each stage and the nickname you choose. A random nickname (such as PLAYER1234) is used until you change it.</li>
+        <li><b>An anonymous player ID</b>: a random ID created automatically when you first open the game. It is not linked to your name, email, phone number or any account.</li>
+      </ul>
+      <p>Please do not use your real name or other personal information as your nickname. We do not collect your email address, contacts, location, photos or any other personal information. The game has no ads and no in-app purchases.</p>
+      <p>Settings such as sound, language and ad mode are saved only on your device and are not sent to us.</p>
 
-    <h2>Where it is stored</h2>
-    <p>Progress is stored on your device and in Google Firebase (Firebase Authentication and Cloud Firestore), operated by Google LLC. See <a href="https://firebase.google.com/support/privacy">Firebase Privacy and Security</a>.</p>
+      <h2>How we use it</h2>
+      <p>Your game progress is saved on your device and backed up to our cloud storage so that you do not lose it. It is used only to run the game.</p>
+      <p>Leaderboard records (nickname and clear time) are <b>public</b>: other players can see them in the game's ranking screen.</p>
 
-    <h2>Sharing</h2>
-    <p>We do not sell or share your data with anyone. Apart from the public leaderboard, your data is not shown to other players.</p>
+      <h2>Where it is stored</h2>
+      <p>Progress is stored on your device and in Google Firebase (Firebase Authentication and Cloud Firestore), operated by Google LLC. See <a href="https://firebase.google.com/support/privacy">Firebase Privacy and Security</a>.</p>
 
-    <h2>Deleting your data</h2>
-    <p>Uninstalling the game or clearing its data removes the progress on your device and disconnects the anonymous ID. Leaderboard records stay until deleted. To ask us to delete the cloud copy or your leaderboard records, contact us at the address below.</p>
+      <h2>Sharing</h2>
+      <p>We do not sell or share your data with anyone. Apart from the public leaderboard, your data is not shown to other players.</p>
 
-    <h2>Children</h2>
-    <p>The game does not knowingly collect personal information from anyone, including children.</p>
+      <h2>Deleting your data</h2>
+      <p>Uninstalling the game or clearing its data removes the progress on your device and disconnects the anonymous ID. Leaderboard records stay until deleted. To ask us to delete the cloud copy or your leaderboard records, contact us at the address below.</p>
 
-    <h2>Contact</h2>
-    <p><a href="mailto:gitasin00@gmail.com">gitasin00@gmail.com</a></p>
+      <h2>Children</h2>
+      <p>The game does not knowingly collect personal information from anyone, including children.</p>
+
+      <h2>Contact</h2>
+      <p><a href="mailto:gitasin00@gmail.com">gitasin00@gmail.com</a></p>
+      <a class="back" href="/">← Back to the game</a>
+    </article>
+
+    <!-- ── 한국어 ── -->
+    <article lang="ko" hidden>
+      <h1>Cube Clean — 개인정보처리방침</h1>
+      <p class="date">최종 수정일: 2026년 10월 19일</p>
+
+      <p>Cube Clean(이하 "게임")는 액션 퍼즐 게임입니다. 이 페이지는 게임이 어떤 정보를 왜 사용하는지 설명합니다.</p>
+
+      <h2>수집하는 정보</h2>
+      <ul>
+        <li><b>게임 진행 상황</b>: 스테이지별 별 개수와 최고 클리어 기록</li>
+        <li><b>랭킹 기록</b>: 스테이지별 최고 클리어 기록과 직접 정한 닉네임. 닉네임을 바꾸기 전까지는 무작위 닉네임(예: PLAYER1234)이 사용됩니다.</li>
+        <li><b>익명 플레이어 ID</b>: 게임을 처음 열 때 자동으로 만들어지는 무작위 ID입니다. 이름, 이메일, 전화번호나 어떤 계정과도 연결되지 않습니다.</li>
+      </ul>
+      <p>닉네임에 실명이나 다른 개인정보를 쓰지 마세요. 게임은 이메일 주소, 연락처, 위치, 사진 등 그 밖의 개인정보를 수집하지 않습니다. 게임에는 광고와 인앱 결제가 없습니다.</p>
+      <p>소리, 언어, 광고 모드 같은 설정은 기기에만 저장되며 저희에게 전송되지 않습니다.</p>
+
+      <h2>이용 목적</h2>
+      <p>게임 진행 상황은 기기에 저장되고, 잃어버리지 않도록 클라우드 저장소에 백업됩니다. 게임을 운영하는 데에만 사용됩니다.</p>
+      <p>랭킹 기록(닉네임과 클리어 기록)은 <b>공개</b>되며, 다른 플레이어가 게임의 랭킹 화면에서 볼 수 있습니다.</p>
+
+      <h2>저장 위치</h2>
+      <p>진행 상황은 기기와 Google LLC가 운영하는 Google Firebase(Firebase Authentication, Cloud Firestore)에 저장됩니다. 자세한 내용은 <a href="https://firebase.google.com/support/privacy">Firebase 개인정보 보호 및 보안</a>을 참고하세요.</p>
+
+      <h2>제3자 제공</h2>
+      <p>저희는 정보를 판매하거나 다른 곳에 제공하지 않습니다. 공개 랭킹을 제외하면 다른 플레이어에게 정보가 보이지 않습니다.</p>
+
+      <h2>정보 삭제</h2>
+      <p>게임을 삭제하거나 앱 데이터를 지우면 기기에 있는 진행 상황이 지워지고 익명 ID와의 연결이 끊어집니다. 랭킹 기록은 삭제 요청 전까지 남아 있습니다. 클라우드 백업이나 랭킹 기록 삭제를 원하시면 아래 주소로 연락해 주세요.</p>
+
+      <h2>아동</h2>
+      <p>게임은 아동을 포함한 누구의 개인정보도 의도적으로 수집하지 않습니다.</p>
+
+      <h2>문의</h2>
+      <p><a href="mailto:gitasin00@gmail.com">gitasin00@gmail.com</a></p>
+      <a class="back" href="/">← 게임으로 돌아가기</a>
+    </article>
+
+    <!-- ── 繁體中文 ── -->
+    <article lang="zh-TW" hidden>
+      <h1>Cube Clean — 隱私權政策</h1>
+      <p class="date">最後更新：2026 年 10 月 19 日</p>
+
+      <p>Cube Clean（以下稱「本遊戲」）是一款動作益智遊戲。本頁說明本遊戲使用哪些資料以及使用原因。</p>
+
+      <h2>我們收集的資料</h2>
+      <ul>
+        <li><b>遊戲進度</b>：各關卡的星星數與最佳過關紀錄。</li>
+        <li><b>排行榜紀錄</b>：各關卡的最佳過關紀錄，以及您自行設定的暱稱。在您變更之前，會使用隨機暱稱（例如 PLAYER1234）。</li>
+        <li><b>匿名玩家 ID</b>：第一次開啟遊戲時自動產生的隨機 ID，不會與您的姓名、電子郵件、電話號碼或任何帳號連結。</li>
+      </ul>
+      <p>請勿使用真實姓名或其他個人資料作為暱稱。我們不會收集您的電子郵件地址、聯絡人、位置、照片或其他任何個人資料。本遊戲沒有廣告，也沒有應用程式內購買。</p>
+      <p>音效、語言、廣告模式等設定只會儲存在您的裝置上，不會傳送給我們。</p>
+
+      <h2>使用方式</h2>
+      <p>您的遊戲進度會儲存在裝置上，並備份到我們的雲端儲存空間，以免遺失。這些資料只用於運作本遊戲。</p>
+      <p>排行榜紀錄（暱稱與過關紀錄）為<b>公開</b>資料，其他玩家可以在遊戲的排行榜畫面中看到。</p>
+
+      <h2>儲存位置</h2>
+      <p>進度會儲存在您的裝置，以及由 Google LLC 營運的 Google Firebase（Firebase Authentication 與 Cloud Firestore）。詳情請參閱 <a href="https://firebase.google.com/support/privacy">Firebase 隱私權與安全性</a>。</p>
+
+      <h2>資料分享</h2>
+      <p>我們不會出售您的資料，也不會與任何人分享。除了公開的排行榜之外，其他玩家看不到您的資料。</p>
+
+      <h2>刪除資料</h2>
+      <p>解除安裝遊戲或清除遊戲資料，會刪除裝置上的進度，並中斷與匿名 ID 的連結。排行榜紀錄會保留到被刪除為止。如需刪除雲端備份或排行榜紀錄，請透過下方信箱與我們聯絡。</p>
+
+      <h2>兒童</h2>
+      <p>本遊戲不會故意收集任何人（包括兒童）的個人資料。</p>
+
+      <h2>聯絡我們</h2>
+      <p><a href="mailto:gitasin00@gmail.com">gitasin00@gmail.com</a></p>
+      <a class="back" href="/">← 回到遊戲</a>
+    </article>
+
+    <!-- ── 日本語 ── -->
+    <article lang="ja" hidden>
+      <h1>Cube Clean — プライバシーポリシー</h1>
+      <p class="date">最終更新日：2026年10月19日</p>
+
+      <p>Cube Clean（以下「本ゲーム」）はアクションパズルゲームです。このページでは、本ゲームが使用するデータとその目的を説明します。</p>
+
+      <h2>収集する情報</h2>
+      <ul>
+        <li><b>ゲームの進行状況</b>：ステージごとのスター数とベストクリアタイム。</li>
+        <li><b>ランキング記録</b>：ステージごとのベストクリアタイムと、ご自身で設定したニックネーム。変更するまではランダムなニックネーム（例：PLAYER1234）が使われます。</li>
+        <li><b>匿名プレイヤーID</b>：初めてゲームを開いたときに自動で作られるランダムなIDです。氏名、メールアドレス、電話番号、その他のアカウントとは結び付きません。</li>
+      </ul>
+      <p>ニックネームに本名やその他の個人情報を使わないでください。メールアドレス、連絡先、位置情報、写真、その他の個人情報は収集しません。本ゲームには広告もアプリ内課金もありません。</p>
+      <p>サウンド、言語、広告モードなどの設定は端末にのみ保存され、当方には送信されません。</p>
+
+      <h2>利用目的</h2>
+      <p>ゲームの進行状況は端末に保存され、失われないようクラウドストレージにバックアップされます。ゲームの運営にのみ使用します。</p>
+      <p>ランキング記録（ニックネームとクリアタイム）は<b>公開</b>され、他のプレイヤーがゲーム内のランキング画面で見ることができます。</p>
+
+      <h2>保存場所</h2>
+      <p>進行状況は端末と、Google LLC が運営する Google Firebase（Firebase Authentication および Cloud Firestore）に保存されます。詳しくは <a href="https://firebase.google.com/support/privacy">Firebase のプライバシーとセキュリティ</a>をご覧ください。</p>
+
+      <h2>第三者への提供</h2>
+      <p>データを販売したり、第三者と共有したりすることはありません。公開ランキングを除き、他のプレイヤーにデータが表示されることはありません。</p>
+
+      <h2>データの削除</h2>
+      <p>ゲームをアンインストールするか、アプリのデータを消去すると、端末内の進行状況が削除され、匿名IDとの結び付きが解除されます。ランキング記録は削除されるまで残ります。クラウド上のバックアップやランキング記録の削除をご希望の場合は、下記のアドレスまでご連絡ください。</p>
+
+      <h2>お子様について</h2>
+      <p>本ゲームは、お子様を含むいかなる方の個人情報も意図的に収集することはありません。</p>
+
+      <h2>お問い合わせ</h2>
+      <p><a href="mailto:gitasin00@gmail.com">gitasin00@gmail.com</a></p>
+      <a class="back" href="/">← ゲームに戻る</a>
+    </article>
   </main>
+
+  <script>
+    // 게임의 i18n.js와 같은 규칙으로 언어 선택 (같은 저장 키를 써서 게임에서 고른 언어를 따라감)
+    (() => {
+      const KEY = 'cybercube.lang';
+      const SUPPORTED = ['ko', 'en', 'zh-TW', 'ja'];
+      const TITLES = {
+        en: 'Cube Clean - Privacy Policy',
+        ko: 'Cube Clean - 개인정보처리방침',
+        'zh-TW': 'Cube Clean - 隱私權政策',
+        ja: 'Cube Clean - プライバシーポリシー',
+      };
+      function detect() {
+        const list = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'en'];
+        for (const raw of list) {
+          const l = String(raw).toLowerCase();
+          if (l.startsWith('ko')) return 'ko';
+          if (l.startsWith('ja')) return 'ja';
+          if (l.startsWith('zh')) return 'zh-TW';
+          if (l.startsWith('en')) return 'en';
+        }
+        return 'en';
+      }
+      function show(lang, remember) {
+        document.querySelectorAll('article[lang]').forEach((a) => { a.hidden = a.lang !== lang; });
+        document.querySelectorAll('.langs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+        document.documentElement.lang = lang;
+        document.title = TITLES[lang];
+        if (remember) { try { localStorage.setItem(KEY, lang); } catch (e) { /* 이번만 */ } }
+      }
+      let lang = new URLSearchParams(location.search).get('lang');
+      if (!SUPPORTED.includes(lang)) { try { lang = localStorage.getItem(KEY); } catch (e) { lang = null; } }
+      if (!SUPPORTED.includes(lang)) lang = detect();
+      show(lang, false);
+      document.querySelectorAll('.langs button').forEach((b) => { b.onclick = () => show(b.dataset.lang, true); });
+    })();
+  </script>
 </body>
 </html>
