@@ -33,6 +33,7 @@
     <nav class="langs" aria-label="Language">
       <button data-lang="ko">한국어</button>
       <button data-lang="en">English</button>
+      <button data-lang="zh-CN">简体中文</button>
       <button data-lang="zh-TW">繁體中文</button>
       <button data-lang="ja">日本語</button>
     </nav>
@@ -109,6 +110,43 @@
       <h2>문의</h2>
       <p><a href="mailto:gitasin00@gmail.com">gitasin00@gmail.com</a></p>
       <a class="back" href="/">← 게임으로 돌아가기</a>
+    </article>
+
+    <!-- ── 简体中文 ── -->
+    <article lang="zh-CN" hidden>
+      <h1>Cube Clean — 隐私政策</h1>
+      <p class="date">最后更新：2026 年 10 月 19 日</p>
+
+      <p>Cube Clean（以下简称"本游戏"）是一款动作益智游戏。本页面说明本游戏会使用哪些信息以及使用原因。</p>
+
+      <h2>我们收集的信息</h2>
+      <ul>
+        <li><b>游戏进度</b>：各关卡获得的星星数和最佳过关记录。</li>
+        <li><b>排行榜记录</b>：各关卡的最佳过关记录，以及您自行设置的昵称。在您修改之前，会使用随机昵称（例如 PLAYER1234）。</li>
+        <li><b>匿名玩家 ID</b>：首次打开游戏时自动生成的随机 ID，不会与您的姓名、电子邮箱、手机号码或任何账号关联。</li>
+      </ul>
+      <p>请不要使用真实姓名或其他个人信息作为昵称。我们不会收集您的电子邮箱地址、通讯录、位置、照片或其他任何个人信息。本游戏没有广告，也没有应用内购买。</p>
+      <p>音效、语言、广告模式等设置只保存在您的设备上，不会发送给我们。</p>
+
+      <h2>使用方式</h2>
+      <p>您的游戏进度会保存在设备上，并备份到我们的云端存储，以免丢失。这些信息仅用于运行本游戏。</p>
+      <p>排行榜记录（昵称和过关记录）是<b>公开</b>的，其他玩家可以在游戏的排行榜页面中看到。</p>
+
+      <h2>存储位置</h2>
+      <p>进度保存在您的设备上，以及由 Google LLC 运营的 Google Firebase（Firebase Authentication 和 Cloud Firestore）中。详情请参阅 <a href="https://firebase.google.com/support/privacy">Firebase 隐私和安全</a>。</p>
+
+      <h2>信息共享</h2>
+      <p>我们不会出售您的信息，也不会与任何人共享。除公开的排行榜外，其他玩家看不到您的信息。</p>
+
+      <h2>删除信息</h2>
+      <p>卸载游戏或清除游戏数据后，设备上的进度会被删除，并解除与匿名 ID 的关联。排行榜记录会保留到被删除为止。如需删除云端备份或排行榜记录，请通过下方邮箱联系我们。</p>
+
+      <h2>儿童</h2>
+      <p>本游戏不会故意收集任何人（包括儿童）的个人信息。</p>
+
+      <h2>联系我们</h2>
+      <p><a href="mailto:gitasin00@gmail.com">gitasin00@gmail.com</a></p>
+      <a class="back" href="/">← 返回游戏</a>
     </article>
 
     <!-- ── 繁體中文 ── -->
@@ -190,10 +228,11 @@
     // 게임의 i18n.js와 같은 규칙으로 언어 선택 (같은 저장 키를 써서 게임에서 고른 언어를 따라감)
     (() => {
       const KEY = 'cybercube.lang';
-      const SUPPORTED = ['ko', 'en', 'zh-TW', 'ja'];
+      const SUPPORTED = ['ko', 'en', 'zh-CN', 'zh-TW', 'ja'];
       const TITLES = {
         en: 'Cube Clean - Privacy Policy',
         ko: 'Cube Clean - 개인정보처리방침',
+        'zh-CN': 'Cube Clean - 隐私政策',
         'zh-TW': 'Cube Clean - 隱私權政策',
         ja: 'Cube Clean - プライバシーポリシー',
       };
@@ -203,7 +242,7 @@
           const l = String(raw).toLowerCase();
           if (l.startsWith('ko')) return 'ko';
           if (l.startsWith('ja')) return 'ja';
-          if (l.startsWith('zh')) return 'zh-TW';
+          if (l.startsWith('zh')) return /-(tw|hk|mo|hant)/.test(l) ? 'zh-TW' : 'zh-CN';
           if (l.startsWith('en')) return 'en';
         }
         return 'en';
@@ -219,6 +258,10 @@
       if (!SUPPORTED.includes(lang)) { try { lang = localStorage.getItem(KEY); } catch (e) { lang = null; } }
       if (!SUPPORTED.includes(lang)) lang = detect();
       show(lang, false);
+      // 게임 안에 들어가 있으면(시작 안내) 돌아가기 링크는 필요 없음
+      if (new URLSearchParams(location.search).has('embed')) {
+        document.querySelectorAll('.back').forEach((a) => { a.hidden = true; });
+      }
       document.querySelectorAll('.langs button').forEach((b) => { b.onclick = () => show(b.dataset.lang, true); });
     })();
   </script>

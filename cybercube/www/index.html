@@ -93,11 +93,22 @@
       <div id="demoBadge" class="demo-badge hidden"></div>
     </div>
     <div id="demoDots" class="demo-dots"></div>
+    <label class="intro-check"><input type="checkbox" class="hide-intro"> <span data-i18n="dontShowAgain">Don't show this again</span></label>
     <div class="demo-nav">
       <button id="demoPrev" class="secondary icon" data-i18n-aria="prev" aria-label="Previous">◀</button>
       <button id="demoStart" data-i18n="start">START ▶</button>
       <button id="demoNext" class="secondary icon" data-i18n-aria="nextAria" aria-label="Next">▶</button>
     </div>
+  </div>
+
+  <!-- 시작 안내 2단계: 개인정보처리방침 (전문을 앱 안에서 보여줌) -->
+  <div id="privacyScreen" class="app screen hidden">
+    <div class="topbar">
+      <div class="stage-name" data-i18n="privacyTitle">PRIVACY POLICY</div>
+    </div>
+    <iframe id="privacyFrame" class="privacy-frame" title="Privacy Policy"></iframe>
+    <label class="intro-check"><input type="checkbox" class="hide-intro"> <span data-i18n="dontShowAgain">Don't show this again</span></label>
+    <button id="privacyOk" class="privacy-ok" data-i18n="introNext">NEXT ▶</button>
   </div>
 
   <!-- 일시정지 / 클리어 / 실패 -->
@@ -127,6 +138,7 @@
   <script src="stages.js"></script>
   <script src="ads-config.js"></script>
   <script src="ads.js"></script>
+  <script src="sound.js"></script>
   <script src="crack.js"></script>
   <script src="demo.js"></script>
   <script src="game.js"></script>

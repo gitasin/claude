@@ -5,13 +5,18 @@
   const MAX_LIVES = 3;
   const INVINCIBLE_TIME = 1.2;
   const BLUE_SHUFFLE_TIME = 5;  // 남은 파랑을 다른 칸으로 옮기는 주기 (초)
-  const BLUE_SHUFFLE_WARN = 1;  // 옮기기 전에 깜빡이는 시간 (초)
+  const BLUE_SHUFFLE_WARN = 1;
+  const MODAL_GUARD_MS = 400;
+  const DRAG_STEP = 0.075;      // 공을 끌 때 한 칸 이동 간격 (초)
+  const DRAG_GRAB = 1.0;        // 공 중심에서 이 칸 수 안을 터치하면 '공 잡기'
+  const DRAG_HYSTERESIS = 0.15; // 목표 칸이 바뀌려면 칸 경계를 이만큼(칸 비율) 더 넘어야 함 → 경계에서 안 떨림   // 창이 뜬 뒤 이 시간 동안은 버튼이 안 눌림  // 옮기기 전에 깜빡이는 시간 (초)
   const SAVE_KEY = 'cybercube.progress';
 
   const $ = (id) => document.getElementById(id);
   const t = window.I18N.t;
   const stageScreen = $('stageScreen');
   const demoScreen = $('demoScreen');
+  const privacyScreen = $('privacyScreen');
   const gameScreen = $('gameScreen');
   const boardWrap = $('boardWrap');
   const board = $('board');
@@ -40,7 +45,7 @@
     progress.name = merged.name || progress.name;
     progress.updated = merged.updated;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(progress)); } catch (e) { /* 무시 */ }
-    if (!state && demoScreen.classList.contains('hidden')) showStages();
+    if (!state && demoScreen.classList.contains('hidden') && privacyScreen.classList.contains('hidden')) showStages();
   }
 
   // 기록 = 클리어 시간 + 피격당 5초 (firestore.rules와 같은 계산)
@@ -51,36 +56,8 @@
     return progress.name;
   };
 
-  // ── 사운드 (WebAudio로 간단한 전자음) ──
-  let audio = null;
-  function beep(freq, dur = 0.08, type = 'square', vol = 0.06, delay = 0) {
-    if (!progress.sound) return;
-    try {
-      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-      const t = audio.currentTime + delay;
-      const osc = audio.createOscillator();
-      const gain = audio.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, t);
-      gain.gain.setValueAtTime(vol, t);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      osc.connect(gain).connect(audio.destination);
-      osc.start(t);
-      osc.stop(t + dur);
-    } catch (e) { /* 소리 없이 진행 */ }
-  }
-  const sfx = {
-    step: () => beep(220, 0.04, 'triangle', 0.04),
-    blue: () => { beep(660, 0.06); beep(990, 0.08, 'square', 0.05, 0.05); },
-    hit: () => beep(90, 0.3, 'sawtooth', 0.12),
-    crack: () => { beep(2400, 0.04, 'square', 0.05); beep(1700, 0.05, 'square', 0.04, 0.03); },
-    shatter: () => [2600, 2100, 3000, 1600, 2300, 1200].forEach((f, i) => beep(f, 0.06, 'square', 0.05, i * 0.035)),
-    tick: () => beep(440, 0.08, 'sine', 0.08),
-    go: () => beep(880, 0.15, 'sine', 0.08),
-    shuffle: () => { beep(1200, 0.05, 'sine', 0.05); beep(600, 0.08, 'sine', 0.05, 0.05); },
-    clear: () => [523, 659, 784, 1046].forEach((f, i) => beep(f, 0.12, 'square', 0.06, i * 0.09)),
-    fail: () => [300, 220, 150].forEach((f, i) => beep(f, 0.18, 'sawtooth', 0.08, i * 0.15)),
-  };
+  // ── 사운드 (sound.js에서 합성) ──
+  const sfx = window.Sound.create(() => progress.sound);
   const vibrate = (ms) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* 무시 */ } };
 
   // ── 게임 상태 ──
@@ -235,11 +212,29 @@
   }
 
   // ── 플레이어 ──
+  const canStep = (x, y) => inside(x, y) && state.tiles[idx(x, y)] !== '#';
+
+  // ── 공 끌기: 손가락 아래 칸(목표)으로 한 칸씩 따라감 ──
+  // 대각선 칸이 구멍이면 가로/세로 중 갈 수 있는 쪽으로 비켜 감. 손을 떼면 마지막 목표까지 가서 멈춤
+  function dragStep() {
+    const d = state.drag;
+    if (state.px === d.tx && state.py === d.ty) {
+      if (!d.active) state.drag = null;
+      return;
+    }
+    const sx = Math.sign(d.tx - state.px);
+    const sy = Math.sign(d.ty - state.py);
+    const tries = sx && sy ? [[sx, sy], [sx, 0], [0, sy]] : [[sx, sy]];
+    const step = tries.find(([x, y]) => canStep(state.px + x, state.py + y));
+    if (step) move(step[0], step[1]);
+    else if (!d.active) state.drag = null; // 막혀서 더 못 감
+  }
+
   function move(dx, dy) {
     if (!state || state.phase !== 'play') return;
     const nx = state.px + dx;
     const ny = state.py + dy;
-    if (!inside(nx, ny) || state.tiles[idx(nx, ny)] === '#') return;
+    if (!canStep(nx, ny)) { bumpPlayer(dx, dy); return; }
     playerEl.classList.toggle('diag', dx !== 0 && dy !== 0); // 대각선은 거리가 길어서 애니메이션도 조금 길게
     rollPlayer(playerEl, dx, dy);
     state.px = nx;
@@ -327,6 +322,16 @@
     window.Crack.reset(playerEl);
   }
 
+  // 막힌 방향으로 밀면 그쪽으로 살짝 툭 부딪힘 (입력은 받았다는 표시)
+  function bumpPlayer(dx, dy) {
+    sfx.bump();
+    playerEl.style.setProperty('--bx', dx);
+    playerEl.style.setProperty('--by', dy);
+    playerEl.classList.remove('bump');
+    void playerEl.offsetWidth;
+    playerEl.classList.add('bump');
+  }
+
   // 육각형 굴리기: 오른쪽·아래로 가면 시계 방향, 왼쪽·위로 가면 반시계 방향으로 60°
   function rollPlayer(el, dx, dy) {
     const turn = dx !== 0 ? Math.sign(dx) : Math.sign(dy);
@@ -364,6 +369,10 @@
         h.acc += dt * h.speed;
         while (h.acc >= 1) { h.acc -= 1; stepHazard(h); }
       });
+      if (state.drag) {
+        state.drag.acc += dt;
+        if (state.drag.acc >= DRAG_STEP) { state.drag.acc = 0; dragStep(); }
+      }
       if (state.shuffleLeft > 0) {
         state.shuffleLeft -= dt;
         if (state.shuffleLeft <= 0) { shuffleBlue(); state.shuffleLeft += nextShuffleTime(state.shuffleSpec); }
@@ -390,6 +399,7 @@
       else if (t === 'B') cls += moving ? ' blue moving' : ' blue';
       else if (t === 'D') cls += ' done';
       if (state.pops.has(i)) cls += ' pop';
+      if (state.drag && i === idx(state.drag.tx, state.drag.ty) && i !== idx(state.px, state.py)) cls += ' target';
       if (cls !== cellClass[i]) { cells[i].className = cls; cellClass[i] = cls; }
     }
     playerEl.style.transform = `translate(${state.px * 100}%, ${state.py * 100}%)`;
@@ -476,22 +486,34 @@
       </div>
       <ol class="rank-list" id="rankList"><li class="empty">${t('loading')}</li></ol>
       <p class="rank-me" id="rankMe"></p>
+      <label class="name-label" for="nameInput">${t('nameLabel')}</label>
       <div class="name-row">
         <input id="nameInput" maxlength="12" placeholder="${t('name')}" autocomplete="off">
-        <button id="nameBtn" class="secondary">${t('ok')}</button>
-      </div>`;
+        <button id="nameBtn" class="secondary" disabled>${t('save')}</button>
+      </div>
+      <p class="name-status" id="nameStatus"></p>`;
     $('rankPrev').onclick = () => showRanking(n - 1);
     $('rankNext').onclick = () => showRanking(n + 1);
+    // 닉네임 저장: 바꿨을 때만 버튼이 눌림, 엔터로도 저장, 저장하면 목록의 내 이름도 바로 바꿈
     const input = $('nameInput');
+    const nameBtn = $('nameBtn');
     input.value = progress.name;
-    $('nameBtn').onclick = () => {
+    input.oninput = () => {
+      const v = input.value.trim();
+      nameBtn.disabled = !v || v === progress.name;
+      $('nameStatus').textContent = '';
+    };
+    input.onkeydown = (e) => { if (e.key === 'Enter' && !nameBtn.disabled) nameBtn.click(); };
+    nameBtn.onclick = () => {
       const name = input.value.trim().slice(0, 12);
       if (!name || name === progress.name) return;
       progress.name = name;
       save();
-      window.cloud?.rename(name, Object.keys(progress.best));
+      nameBtn.disabled = true;
       input.blur();
-      setTimeout(() => token === rankToken && showRanking(n), 300);
+      $('nameStatus').textContent = t('saved');
+      document.querySelectorAll('#rankList li.me span:nth-child(2)').forEach((s) => { s.textContent = name; });
+      window.cloud?.rename(name, Object.keys(progress.best)); // 서버 기록의 이름은 뒤에서 바꿈
     };
 
     const myBest = progress.best[n];
@@ -549,7 +571,8 @@
     state.phase = 'fail';
     state.failReason = reason;
     window.Ads.countResult();
-    sfx.fail();
+    // 죽음(생명 0)은 깨진 뒤 긴 "삐———", 시간 초과는 "삐삐"
+    (reason === 'outOfLife' ? sfx.flatline : sfx.timeUp)();
     showFailModal();
   }
 
@@ -557,8 +580,8 @@
     const n = state.n;
     const life = state.failReason === 'outOfLife';
     const cfg = window.ADS_CONFIG || {};
-    // 보상형 광고 이어하기: 출시 모드에서 한 판에 한 번
-    const canContinue = window.Ads.isRelease() && !state.continued;
+    // 보상형 광고 이어하기: 출시 모드에서 실패할 때마다
+    const canContinue = window.Ads.isRelease(); // 이어한 뒤 또 실패해도 다시 광고로 이어할 수 있음
     showModal(t('failed'), t(state.failReason), null, [
       canContinue && [
         life ? t('watchAdLife', { n: cfg.rewardedLife ?? 1 }) : t('watchAdTime', { n: cfg.rewardedTime ?? 15 }),
@@ -622,11 +645,24 @@
       : '★'.repeat(stars) + `<span class="off">${'★'.repeat(3 - stars)}</span>`;
     const box = $('modalButtons');
     box.innerHTML = '';
+    // 창이 뜬 직후의 터치는 무시: 판을 탭해서 클리어하면 손을 뗀 자리로 클릭이 한 번 더 들어와서
+    // 마침 그 자리에 있는 '다음' 버튼이 눌려 창을 보기도 전에 넘어가는 일이 있었음
+    const openedAt = performance.now();
     buttons.filter(Boolean).forEach(([label, fn, secondary]) => {
       const b = document.createElement('button');
-      b.textContent = label;
+      // 문구 속 ♥는 빨간 하트로
+      label.split('♥').forEach((part, k) => {
+        if (k > 0) {
+          const heart = document.createElement('span');
+          heart.className = 'heart';
+          heart.textContent = '♥';
+          b.appendChild(heart);
+        }
+        if (part) b.appendChild(document.createTextNode(part));
+      });
       if (secondary) b.className = 'secondary';
       b.onclick = () => {
+        if (performance.now() - openedAt < MODAL_GUARD_MS) return;
         box.querySelectorAll('button').forEach((x) => { x.disabled = true; });
         fn();
       };
@@ -643,6 +679,7 @@
     window.Demo.stop();
     gameScreen.classList.add('hidden');
     demoScreen.classList.add('hidden');
+    privacyScreen.classList.add('hidden');
     stageScreen.classList.remove('hidden');
     const unlocked = (i) => i === 0 || (progress.stars[i - 1] || 0) > 0;
     const starsOf = (i) => progress.stars[i] || 0;
@@ -661,7 +698,7 @@
       const got = tier.stages.reduce((sum, _, k) => sum + starsOf(start + k), 0);
       const b = document.createElement('button');
       b.className = 'tab' + (ti === progress.tab ? ' active' : '') + (unlocked(start) ? '' : ' locked');
-      b.innerHTML = `${unlocked(start) ? '' : '🔒 '}${t(`tier${tier.name}`)}<small>★ ${got}/${tier.stages.length * 3}</small>`;
+      b.innerHTML = `${t(`tier${tier.name}`)}<small>${unlocked(start) ? '' : '🔒 '}★ ${got}/${tier.stages.length * 3}</small>`; // 잠금 표시는 아래 줄에 (이름이 한 줄로 유지되게)
       b.onclick = () => { progress.tab = ti; showStages(); };
       tabs.appendChild(b);
     });
@@ -684,36 +721,78 @@
   }
 
   // ── 입력 ──
-  // 스와이프: 손을 떼지 않고 계속 끌면 여러 칸 이동 (8방향)
-  // 탭: 탭한 칸 방향으로 한 칸 이동
+  // 공 끌기: 공(또는 바로 옆 칸)을 누른 채 끌면 손가락 아래 칸으로 따라감 (가장 정확)
+  // 스와이프: 공이 아닌 곳에서 밀기. 손을 떼지 않고 계속 끌면 여러 칸 이동 (8방향)
+  // 짧게 민 것도 스와이프: 손가락이 TAP_SLOP 이상 움직였으면 민 방향으로 (탭한 위치 쪽으로 가지 않음)
+  // 탭: 손가락이 거의 안 움직였을 때만 탭한 칸 방향으로 한 칸 이동
   const SWIPE = 26;
-  // 대각선으로 인정하는 각도 (수평에서 몇 도). 끌던 방향을 조금 더 유지해서 지그재그를 줄임
-  //   처음 / 직선으로 끌던 중: 25°~65° (살짝 비스듬한 상하좌우 스와이프는 그대로 직선)
-  //   대각선으로 끌던 중:     15°~75° (손가락이 조금 흔들려도 계속 대각선)
-  const DIAGONAL_BAND = { straight: [25, 65], diagonal: [15, 75] };
-  function move8(dx, dy, wasDiagonal = false) {
-    const [min, max] = DIAGONAL_BAND[wasDiagonal ? 'diagonal' : 'straight'];
+  const TAP_SLOP = 10;
+  // 대각선으로 인정하는 각도 (수평에서 몇 도). 끌던 방향을 유지해서 엉뚱한 방향이 섞이지 않게
+  //   처음:              25°~65°
+  //   직선으로 끌던 중:  32°~58° (살짝 휘어도 계속 직선)
+  //   대각선으로 끌던 중: 15°~75° (손가락이 조금 흔들려도 계속 대각선)
+  const DIAGONAL_BAND = { first: [25, 65], straight: [32, 58], diagonal: [15, 75] };
+  function move8(dx, dy, last = 'first') {
+    const [min, max] = DIAGONAL_BAND[last];
     const angle = Math.atan2(Math.abs(dy), Math.abs(dx)) * 180 / Math.PI;
-    if (angle < min) { move(Math.sign(dx), 0); return false; }
-    if (angle > max) { move(0, Math.sign(dy)); return false; }
+    if (angle < min) { move(Math.sign(dx), 0); return 'straight'; }
+    if (angle > max) { move(0, Math.sign(dy)); return 'straight'; }
     move(Math.sign(dx), Math.sign(dy));
-    return true;
+    return 'diagonal';
   }
+  // touch: 시작점(sx, sy), 다음 칸 기준점(x, y), 이동했는지, 마지막 방향 종류
   let touch = null;
+  // 손가락 위치 → 판 위 칸 좌표 (소수, 칸 단위)
+  function fingerCell(e) {
+    const r = board.getBoundingClientRect();
+    return [(e.clientX - r.left) / (r.width / COLS), (e.clientY - r.top) / (r.height / ROWS)];
+  }
   boardWrap.addEventListener('pointerdown', (e) => {
-    touch = { x: e.clientX, y: e.clientY, moved: false, diagonal: false };
     boardWrap.setPointerCapture(e.pointerId);
+    if (state && (state.phase === 'play' || state.phase === 'ready')) {
+      const [fx, fy] = fingerCell(e);
+      if (Math.abs(fx - (state.px + 0.5)) <= DRAG_GRAB && Math.abs(fy - (state.py + 0.5)) <= DRAG_GRAB) {
+        // 공 잡기: 처음 목표는 손가락 아래 칸 (바로 옆 칸을 눌렀으면 그 칸으로 감)
+        const tx = Math.max(0, Math.min(COLS - 1, Math.floor(fx)));
+        const ty = Math.max(0, Math.min(ROWS - 1, Math.floor(fy)));
+        state.drag = { tx, ty, active: true, acc: DRAG_STEP };
+        touch = { mode: 'drag' };
+        render();
+        return;
+      }
+    }
+    touch = { sx: e.clientX, sy: e.clientY, x: e.clientX, y: e.clientY, moved: false, last: 'first' };
   });
   boardWrap.addEventListener('pointermove', (e) => {
     if (!touch) return;
+    if (touch.mode === 'drag') {
+      if (!state || !state.drag) return;
+      const [fx, fy] = fingerCell(e);
+      const d = state.drag;
+      // 지금 목표 칸 중심에서 0.5 + 여유 이상 벗어나야 목표를 바꿈
+      if (Math.abs(fx - (d.tx + 0.5)) > 0.5 + DRAG_HYSTERESIS) d.tx = Math.max(0, Math.min(COLS - 1, Math.floor(fx)));
+      if (Math.abs(fy - (d.ty + 0.5)) > 0.5 + DRAG_HYSTERESIS) d.ty = Math.max(0, Math.min(ROWS - 1, Math.floor(fy)));
+      return;
+    }
     const dx = e.clientX - touch.x;
     const dy = e.clientY - touch.y;
     if (Math.hypot(dx, dy) < SWIPE) return;
-    const diagonal = move8(dx, dy, touch.diagonal);
-    touch = { x: e.clientX, y: e.clientY, moved: true, diagonal };
+    touch.last = move8(dx, dy, touch.last);
+    touch.x = e.clientX;
+    touch.y = e.clientY;
+    touch.moved = true;
   });
   boardWrap.addEventListener('pointerup', (e) => {
-    if (touch && !touch.moved && state) {
+    if (touch && touch.mode === 'drag') {
+      if (state && state.drag) state.drag.active = false; // 마지막 목표까지 가서 멈춤
+      touch = null;
+      return;
+    }
+    const sdx = touch ? e.clientX - touch.sx : 0;
+    const sdy = touch ? e.clientY - touch.sy : 0;
+    if (touch && !touch.moved && state && Math.hypot(sdx, sdy) >= TAP_SLOP) {
+      move8(sdx, sdy); // 짧게 민 스와이프
+    } else if (touch && !touch.moved && state) {
       const r = board.getBoundingClientRect();
       const cx = (e.clientX - r.left) / (r.width / COLS) - 0.5;
       const cy = (e.clientY - r.top) / (r.height / ROWS) - 0.5;
@@ -723,7 +802,12 @@
     }
     touch = null;
   });
-  boardWrap.addEventListener('pointercancel', () => { touch = null; });
+  boardWrap.addEventListener('pointercancel', () => {
+    if (touch && touch.mode === 'drag' && state && state.drag) state.drag.active = false;
+    touch = null;
+  });
+  // 판에서 손을 뗄 때 브라우저가 덧붙이는 클릭을 막음 (이동은 pointer 이벤트로 이미 처리)
+  boardWrap.addEventListener('touchend', (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
 
   const KEYS = {
     ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
@@ -739,7 +823,7 @@
 
   $('backBtn').onclick = showStages;
   $('pauseBtn').onclick = pause;
-  $('helpBtn').onclick = showDemo;
+  $('helpBtn').onclick = () => showDemo(showStages, false);
 
   // 언어 선택 (data-i18n 글자는 I18N.apply가 바꾸고, 스테이지 화면은 다시 그림)
   const langBtn = $('langBtn');
@@ -783,19 +867,44 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 
   // ── 시연 화면 ──
-  function showDemo() {
+  // ── 시작 안내: 앱을 열 때마다 개인정보처리방침 → 게임 방법 시연 ──
+  // '다음부터 표시하지 않기'를 체크하면 다음 실행부터는 바로 스테이지 화면 (기기별 설정)
+  const HIDE_INTRO_KEY = 'cybercube.hideIntro';
+  const introHidden = () => { try { return localStorage.getItem(HIDE_INTRO_KEY) === '1'; } catch (e) { return false; } };
+  const hideBoxes = document.querySelectorAll('.hide-intro');
+  hideBoxes.forEach((box) => {
+    box.onchange = () => {
+      try { localStorage.setItem(HIDE_INTRO_KEY, box.checked ? '1' : '0'); } catch (e) { /* 이번 실행 동안만 */ }
+      hideBoxes.forEach((other) => { other.checked = box.checked; }); // 두 화면의 체크 상자는 같은 설정
+    };
+  });
+
+  // withCheck: 시작 안내로 열 때만 체크 상자 표시 (? 버튼으로 열면 숨김)
+  function showDemo(done, withCheck) {
     stageScreen.classList.add('hidden');
     gameScreen.classList.add('hidden');
+    privacyScreen.classList.add('hidden');
     demoScreen.classList.remove('hidden');
-    window.Demo.start(() => {
-      progress.seenDemo = true;
-      save();
-      showStages();
-    });
+    demoScreen.querySelector('.intro-check').classList.toggle('hidden', !withCheck);
+    window.Demo.start(done);
+  }
+
+  function showPrivacy(done) {
+    stageScreen.classList.add('hidden');
+    gameScreen.classList.add('hidden');
+    demoScreen.classList.add('hidden');
+    privacyScreen.classList.remove('hidden');
+    $('privacyFrame').src = `privacy.html?lang=${encodeURIComponent(window.I18N.lang)}&embed=1`;
+    $('privacyOk').onclick = done;
+  }
+
+  function showIntro() {
+    hideBoxes.forEach((box) => { box.checked = introHidden(); });
+    showPrivacy(() => showDemo(showStages, true));
   }
 
   buildBoard();
-  if (progress.seenDemo) showStages();
-  else showDemo(); // 처음 실행이면 규칙 시연부터
+  if (introHidden()) showStages();
+  else showIntro();
   window.cloud?.start(JSON.parse(JSON.stringify(progress)), applyCloudProgress);
 })();
