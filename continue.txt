@@ -1,0 +1,64 @@
+Cube Clean — 다른 PC에서 이어서 작업하기
+==========================================
+
+1. 새 PC에서 할 일
+------------------
+git clone https://github.com/gitasin/claude.git
+cd claude
+git checkout gita1
+cd cybercube
+npm install
+npx firebase login        (배포하려면 필요. gitasin0@gmail.com 계정)
+
+그다음 claude 폴더에서 Claude Code를 실행하고, 폰 연결(Remote Control)을 켬.
+이전 PC의 Claude Code는 종료(/exit)해서 폰 앱에 세션이 헷갈리지 않게.
+
+
+2. 새 Claude 세션에 처음 말할 것 (아래를 그대로 붙여 넣기)
+-----------------------------------------------------------
+한글로 답해줘. 설명과 중간 안내도 모두 한글로.
+
+cybercube 폴더의 모바일 웹게임 Cube Clean을 gita1 브랜치 기준으로 이어서 작업하자.
+- stage2048 폴더는 건드리지 마.
+- 커밋·push는 내가 말할 때만.
+- 큰 변경은 먼저 미리보기 채널에 올리고, 내가 말하면 실제 주소에 올려.
+  실제 주소에 올릴 때는 미리보기도 같이 맞춰 줘.
+- 이전 대화 기록: dialog/e41bd2c9-8f84-437a-aa66-b564d304f382.jsonl
+
+
+3. 프로젝트 정보
+----------------
+- Firebase 프로젝트: stages-861a3
+- 실제 주소:   https://stages-861a3.web.app
+- 미리보기:    https://stages-861a3--led-floor-6m05ukpi.web.app  (채널 이름 led-floor, 7일마다 만료)
+- 실제 배포:   cd cybercube && npm run deploy          (빌드 + 호스팅 + 랭킹 규칙)
+- 미리보기 배포: cd cybercube && npm run build && npx firebase hosting:channel:deploy led-floor --expires 7d
+- 파일: www/game.js(본체), stages.js(48스테이지·난이도 설정), orb.js(3D 크리스탈 볼),
+        demo.js(시연), i18n.js(5개 언어), sound.js, crack.js, ads.js, ads-config.js,
+        src/cloud.js(빌드하면 www/cloud.js)
+
+
+4. 지금 상태 (2026-10-23)
+-------------------------
+- 실제 주소, 미리보기, git이 모두 같은 코드.
+- 난이도 4개(초급·중급·고급·특급) × 12스테이지.
+- 생명 3개(♥). 빨강에 닿거나 판 밖으로 떨어지면 -1.
+- 볼은 크리스탈 육각형 볼, 3D로 굴러감.
+- 판 둘레 벽: 스테이지가 올라갈수록 뚫린 곳이 늘어남. 뚫린 쪽으로 나가면 떨어짐.
+  마지막 생명에서 떨어지면 깨지는 연출 없이 바로 실패.
+- 판 기울기: 중급부터 (초급은 없음). 좌우·위아래·대각선. 볼이 낮은 쪽으로 굴러감.
+  떨어진 뒤에는 평평한 판으로 다시 시작.
+- 시작 지점: 원래 시작 지점에서 가장 가까운 초록 칸. 떨어지거나 광고로 이어할 때도 초록에서.
+- 빨강 패턴: 튕김(직선·대각선), 쓸기(가로줄·세로줄), 깜빡임. 초록 위에서는 안전.
+- 보상형 광고: 생명이 다 떨어지면 ♥+3, 시간 초과면 +60초.
+- 마지막 파랑과 빨강이 같은 칸이면 클리어가 먼저.
+- 금·모래시계 아이템과 에너지 방식은 해 봤다가 뺌 (나중에 다시 할 수도 있음. 이전 대화 기록 참고).
+
+
+5. 남은 일
+----------
+- 특급까지 직접 해 보고 의견 정리.
+- 출시 전에 game.js의 시험용 코드 한 줄 지우기:
+    window.__cc = () => state; // 시험용
+- 출시 전에 'Cube Clean' 이름 상표 검색.
+- stage2048/ 변경분과 game/ 폴더는 이전 PC에만 있음 (커밋 안 함).
