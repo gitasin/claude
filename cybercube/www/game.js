@@ -615,6 +615,7 @@
       playerEl.classList.add('snap'); // 시작 지점으로는 미끄러지지 않고 바로
       st.px = st.startX;
       st.py = st.startY;
+      restartFlat();
       st.phase = 'play';
       render();
       void playerEl.offsetWidth;
@@ -666,6 +667,16 @@
     state.tiltX = ax;
     state.tiltY = ay;
     tiltVisual(board, ax, ay);
+  }
+
+  // 다시 시작할 때(떨어진 뒤·광고로 이어할 때): 판을 평평하게 세우고, 평평한 시간부터 새로
+  function restartFlat() {
+    levelBoard();
+    state.rollDir = null;
+    const tl = state.tiltCfg;
+    if (!tl) return;
+    state.tiltPhase = 'flat';
+    state.tiltLeft = rand(tl.flat[0], tl.flat[1]);
   }
 
   function levelBoard() {
@@ -941,8 +952,7 @@
     state.px = state.startX;
     state.py = state.startY;
     state.drag = null;
-    state.rollVel = 0;
-    state.rollAcc = 0;
+    restartFlat();
     playerEl.classList.remove('falling'); // 떨어져서 끝났으면 다시 보이게
     playerEl.classList.add('snap');
     render();
