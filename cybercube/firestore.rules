@@ -30,7 +30,7 @@ service cloud.firestore {
       return d.keys().hasOnly(['name', 'score', 'ms', 'hits', 'at'])
         && d.name is string && d.name.size() >= 1 && d.name.size() <= 12
         && d.ms is int && d.ms >= 3000
-        && d.hits is int && d.hits >= 0 && d.hits <= 2
+        && d.hits is int && d.hits >= 0 && d.hits <= 20
         && d.score == d.ms + d.hits * 5000
         && d.at is timestamp;
     }

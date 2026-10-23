@@ -8,8 +8,8 @@ window.ADS_CONFIG = {
 
   interstitialEvery: 3,    // 전면 광고: 판이 이만큼 끝날 때마다 (클리어·실패 모두 셈)
   interstitialMinGap: 60,  // 전면 광고 사이 최소 간격 (초)
-  rewardedLife: 1,         // 보상형: 생명이 다 떨어졌을 때 받는 생명
-  rewardedTime: 15,        // 보상형: 시간이 다 됐을 때 받는 시간 (초)
+  rewardedLife: 3,         // 보상형: 생명이 다 떨어졌을 때 받는 생명 (3 = 가득)
+  rewardedTime: 60,        // 보상형: 시간이 다 됐을 때 받는 시간 (초, 1분)
   simulatedSeconds: 5,     // 브라우저 가짜 광고 길이 (초)
 
   // AdMob 광고 단위 ID. 지금은 Google 공식 테스트 ID

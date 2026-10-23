@@ -9,7 +9,7 @@
 // - blink: 깜빡임 설정 { period: 한 주기(초), warn: 켜지기 전 경고 시간(초) }
 // - hazards: 움직이는 빨강
 //     { type: 'bounce', x, y, dx, dy, speed }  직선으로 움직이다 막히면 튕김 (dx, dy 둘 다 주면 대각선)
-//     { type: 'chase', x, y, speed }           플레이어를 쫓아옴 (초록 위에 있으면 배회)
+//     { type: 'chase', x, y, speed }           플레이어를 쫓아옴 (초록 위에 있으면 배회) — 패턴이 없어서 지금은 안 씀
 //     { type: 'sweep', axis: 'row'|'col', pos, dir, speed }  한 줄 전체가 쓸고 지나감 (초록은 안전)
 //   speed = 초당 이동 칸 수
 // ── 초급 (EASY): 파랑 이동 4초마다 ──
@@ -29,6 +29,8 @@ const EASY = [
     ],
     hazards: [
       { type: 'bounce', x: 5, y: 4, dx: -1, dy: 0, speed: 1.7 },
+      { type: 'bounce', x: 0, y: 0, dx: 1, dy: 0, speed: 2 },
+      { type: 'bounce', x: 1, y: 4, dx: 0, dy: 1, speed: 2 },
     ],
   },
   {
@@ -48,6 +50,8 @@ const EASY = [
       { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 2.9 },
       { type: 'bounce', x: 5, y: 5, dx: -1, dy: 0, speed: 2.9 },
       { type: 'bounce', x: 3, y: 0, dx: 0, dy: 1, speed: 2.3 },
+      { type: 'bounce', x: 3, y: 4, dx: 1, dy: 0, speed: 2.1 },
+      { type: 'bounce', x: 5, y: 2, dx: 0, dy: 1, speed: 2.1 },
     ],
   },
   {
@@ -67,6 +71,8 @@ const EASY = [
       { type: 'bounce', x: 1, y: 2, dx: 1, dy: 0, speed: 3.5 },
       { type: 'bounce', x: 4, y: 5, dx: -1, dy: 0, speed: 3.5 },
       { type: 'bounce', x: 3, y: 0, dx: 0, dy: 1, speed: 2.3 },
+      { type: 'bounce', x: 0, y: 4, dx: 1, dy: 0, speed: 2.1 },
+      { type: 'bounce', x: 3, y: 3, dx: 0, dy: 1, speed: 2.1 },
     ],
   },
   {
@@ -87,6 +93,8 @@ const EASY = [
       { type: 'bounce', x: 5, y: 7, dx: 0, dy: -1, speed: 2.9 },
       { type: 'bounce', x: 1, y: 2, dx: 1, dy: 0, speed: 2.3 },
       { type: 'bounce', x: 2, y: 4, dx: 1, dy: 1, speed: 2.3 },
+      { type: 'bounce', x: 5, y: 1, dx: 0, dy: 1, speed: 2.2 },
+      { type: 'bounce', x: 4, y: 3, dx: 0, dy: 1, speed: 2.2 },
     ],
   },
   {
@@ -105,6 +113,8 @@ const EASY = [
     blink: { period: 2.7, warn: 0.7 },
     hazards: [
       { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 2.3 },
+      { type: 'bounce', x: 5, y: 7, dx: -1, dy: 0, speed: 2.2 },
+      { type: 'bounce', x: 5, y: 0, dx: 0, dy: 1, speed: 2.2 },
     ],
   },
   {
@@ -123,6 +133,8 @@ const EASY = [
     hazards: [
       { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.4 },
       { type: 'bounce', x: 0, y: 2, dx: 1, dy: 0, speed: 2.3 },
+      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 2.3 },
+      { type: 'bounce', x: 4, y: 1, dx: 0, dy: 1, speed: 2.3 },
     ],
   },
   {
@@ -139,9 +151,11 @@ const EASY = [
       '..P.BB',
     ],
     hazards: [
-      { type: 'chase', x: 2, y: 0, speed: 1.8 },
+      { type: 'bounce', x: 2, y: 0, dx: 1, dy: 0, speed: 2.5 },
       { type: 'bounce', x: 0, y: 4, dx: 1, dy: 0, speed: 2.9 },
       { type: 'bounce', x: 5, y: 1, dx: 0, dy: 1, speed: 2.3 },
+      { type: 'bounce', x: 5, y: 7, dx: -1, dy: 0, speed: 2.3 },
+      { type: 'bounce', x: 4, y: 4, dx: 0, dy: -1, speed: 2.3 },
     ],
   },
   {
@@ -161,6 +175,8 @@ const EASY = [
       { type: 'bounce', x: 0, y: 1, dx: 1, dy: 1, speed: 2.9 },
       { type: 'bounce', x: 5, y: 4, dx: -1, dy: -1, speed: 2.9 },
       { type: 'bounce', x: 0, y: 6, dx: 1, dy: 0, speed: 3.5 },
+      { type: 'bounce', x: 4, y: 0, dx: 1, dy: 0, speed: 2.4 },
+      { type: 'bounce', x: 2, y: 3, dx: 0, dy: 1, speed: 2.4 },
     ],
   },
   {
@@ -181,6 +197,8 @@ const EASY = [
       { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 2.3 },
       { type: 'bounce', x: 4, y: 5, dx: -1, dy: 0, speed: 2.3 },
       { type: 'bounce', x: 0, y: 3, dx: 0, dy: 1, speed: 2.3 },
+      { type: 'bounce', x: 5, y: 0, dx: -1, dy: 0, speed: 2.4 },
+      { type: 'bounce', x: 2, y: 4, dx: 0, dy: 1, speed: 2.4 },
     ],
   },
   {
@@ -200,6 +218,8 @@ const EASY = [
       { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.2 },
       { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 2.9 },
       { type: 'bounce', x: 5, y: 0, dx: 0, dy: 1, speed: 2.3 },
+      { type: 'bounce', x: 5, y: 7, dx: -1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 4, y: 4, dx: 0, dy: 1, speed: 2.5 },
     ],
   },
   {
@@ -217,8 +237,10 @@ const EASY = [
     ],
     blink: { period: 2.7, warn: 0.7 },
     hazards: [
-      { type: 'chase', x: 1, y: 1, speed: 1.5 },
+      { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 2.1 },
       { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 2.9 },
+      { type: 'bounce', x: 5, y: 0, dx: -1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 3, y: 4, dx: 0, dy: -1, speed: 2.5 },
     ],
   },
   {
@@ -238,8 +260,10 @@ const EASY = [
     hazards: [
       { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1 },
       { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 2.9 },
-      { type: 'chase', x: 5, y: 7, speed: 1.3 },
+      { type: 'bounce', x: 5, y: 7, dx: 0, dy: -1, speed: 1.8 },
       { type: 'bounce', x: 1, y: 5, dx: 1, dy: 0, speed: 2.9 },
+      { type: 'bounce', x: 4, y: 3, dx: 1, dy: 0, speed: 2.6 },
+      { type: 'bounce', x: 0, y: 3, dx: 0, dy: 1, speed: 2.6 },
     ],
   },
 ];
@@ -260,9 +284,9 @@ const NORMAL = [
       'B.P..B',
     ],
     hazards: [
-      { type: 'bounce', x: 1, y: 2, dx: 1, dy: 0, speed: 3.5 },
-      { type: 'bounce', x: 0, y: 4, dx: 1, dy: 0, speed: 3.5 },
-      { type: 'bounce', x: 4, y: 0, dx: 0, dy: 1, speed: 2.9 },
+      { type: 'bounce', x: 1, y: 2, dx: 1, dy: 0, speed: 3.2 },
+      { type: 'bounce', x: 0, y: 4, dx: 1, dy: 0, speed: 3.2 },
+      { type: 'bounce', x: 4, y: 0, dx: 0, dy: 1, speed: 2.6 },
     ],
   },
   {
@@ -279,9 +303,9 @@ const NORMAL = [
       '..P.B.',
     ],
     hazards: [
-      { type: 'bounce', x: 1, y: 0, dx: 1, dy: 1, speed: 3.5 },
-      { type: 'bounce', x: 4, y: 1, dx: -1, dy: 1, speed: 3.5 },
-      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 3.5 },
+      { type: 'bounce', x: 1, y: 0, dx: 1, dy: 1, speed: 3.2 },
+      { type: 'bounce', x: 4, y: 1, dx: -1, dy: 1, speed: 3.2 },
+      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 3.2 },
     ],
   },
   {
@@ -299,9 +323,9 @@ const NORMAL = [
     ],
     blink: { period: 2, warn: 0.5 },
     hazards: [
-      { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 2.9 },
-      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 2.9 },
-      { type: 'bounce', x: 4, y: 1, dx: 0, dy: 1, speed: 2.3 },
+      { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 2.6 },
+      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 2.6 },
+      { type: 'bounce', x: 4, y: 1, dx: 0, dy: 1, speed: 2.1 },
     ],
   },
   {
@@ -318,8 +342,8 @@ const NORMAL = [
       'G.P..G',
     ],
     hazards: [
-      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.4 },
-      { type: 'chase', x: 5, y: 2, speed: 1.7 },
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.3 },
+      { type: 'bounce', x: 5, y: 2, dx: 0, dy: 1, speed: 2.1 },
     ],
   },
   {
@@ -336,9 +360,9 @@ const NORMAL = [
       '..P.BB',
     ],
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.4 },
-      { type: 'bounce', x: 1, y: 0, dx: 0, dy: 1, speed: 2.9 },
-      { type: 'bounce', x: 4, y: 5, dx: 0, dy: -1, speed: 2.9 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.3 },
+      { type: 'bounce', x: 1, y: 0, dx: 0, dy: 1, speed: 2.6 },
+      { type: 'bounce', x: 4, y: 5, dx: 0, dy: -1, speed: 2.6 },
     ],
   },
   {
@@ -355,8 +379,8 @@ const NORMAL = [
       '..P.BB',
     ],
     hazards: [
-      { type: 'chase', x: 0, y: 0, speed: 1.7 },
-      { type: 'chase', x: 5, y: 1, speed: 1.4 },
+      { type: 'bounce', x: 0, y: 0, dx: 1, dy: 0, speed: 2.1 },
+      { type: 'bounce', x: 5, y: 1, dx: 0, dy: 1, speed: 1.8 },
     ],
   },
   {
@@ -373,10 +397,10 @@ const NORMAL = [
       'B.P.B.',
     ],
     hazards: [
-      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 0, speed: 4 },
-      { type: 'bounce', x: 5, y: 3, dx: -1, dy: 0, speed: 4 },
-      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 4 },
-      { type: 'bounce', x: 2, y: 0, dx: 0, dy: 1, speed: 2.3 },
+      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 0, speed: 3.6 },
+      { type: 'bounce', x: 5, y: 3, dx: -1, dy: 0, speed: 3.6 },
+      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 3.6 },
+      { type: 'bounce', x: 2, y: 0, dx: 0, dy: 1, speed: 2.1 },
     ],
   },
   {
@@ -394,8 +418,8 @@ const NORMAL = [
     ],
     blink: { period: 2.3, warn: 0.6 },
     hazards: [
-      { type: 'chase', x: 5, y: 5, speed: 1.8 },
-      { type: 'bounce', x: 3, y: 1, dx: 1, dy: 0, speed: 2.9 },
+      { type: 'bounce', x: 5, y: 5, dx: 0, dy: 1, speed: 2.2 },
+      { type: 'bounce', x: 3, y: 1, dx: 1, dy: 0, speed: 2.6 },
     ],
   },
   {
@@ -412,8 +436,8 @@ const NORMAL = [
       'B.P..G',
     ],
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1 },
-      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 0.9 },
+      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 0.9 },
     ],
   },
   {
@@ -430,9 +454,9 @@ const NORMAL = [
       '..P.B.',
     ],
     hazards: [
-      { type: 'bounce', x: 1, y: 2, dx: 1, dy: 0, speed: 3.5 },
-      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 3.5 },
-      { type: 'bounce', x: 4, y: 0, dx: 0, dy: 1, speed: 2.9 },
+      { type: 'bounce', x: 1, y: 2, dx: 1, dy: 0, speed: 3.2 },
+      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 3.2 },
+      { type: 'bounce', x: 4, y: 0, dx: 0, dy: 1, speed: 2.6 },
     ],
   },
   {
@@ -450,9 +474,9 @@ const NORMAL = [
     ],
     blink: { period: 2.2, warn: 0.6 },
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.3 },
-      { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 3.5 },
-      { type: 'bounce', x: 4, y: 4, dx: -1, dy: 0, speed: 3.5 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'bounce', x: 1, y: 1, dx: 1, dy: 0, speed: 3.2 },
+      { type: 'bounce', x: 4, y: 4, dx: -1, dy: 0, speed: 3.2 },
     ],
   },
   {
@@ -470,10 +494,10 @@ const NORMAL = [
     ],
     blink: { period: 2.3, warn: 0.6 },
     hazards: [
-      { type: 'chase', x: 3, y: 0, speed: 1.8 },
-      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 3.5 },
-      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 1, speed: 3.5 },
-      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'bounce', x: 3, y: 0, dx: 1, dy: 0, speed: 2.2 },
+      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 3.2 },
+      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 1, speed: 3.2 },
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.1 },
     ],
   },
 ];
@@ -494,11 +518,11 @@ const HARD = [
       '..P.B.',
     ],
     hazards: [
-      { type: 'bounce', x: 2, y: 1, dx: 1, dy: 0, speed: 4.6 },
-      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 4.6 },
-      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 4.6 },
-      { type: 'bounce', x: 5, y: 0, dx: 0, dy: 1, speed: 3.5 },
-      { type: 'bounce', x: 0, y: 0, dx: 0, dy: 1, speed: 3.5 },
+      { type: 'bounce', x: 2, y: 1, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 5, y: 0, dx: 0, dy: 1, speed: 3.1 },
+      { type: 'bounce', x: 0, y: 0, dx: 0, dy: 1, speed: 3.1 },
     ],
   },
   {
@@ -515,9 +539,9 @@ const HARD = [
       'B.P.B.',
     ],
     hazards: [
-      { type: 'chase', x: 0, y: 0, speed: 2.1 },
-      { type: 'chase', x: 5, y: 0, speed: 1.9 },
-      { type: 'bounce', x: 1, y: 2, dx: 1, dy: 1, speed: 4 },
+      { type: 'bounce', x: 0, y: 0, dx: 1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 5, y: 0, dx: -1, dy: 0, speed: 2.4 },
+      { type: 'bounce', x: 1, y: 2, dx: 1, dy: 1, speed: 3.5 },
     ],
   },
   {
@@ -535,8 +559,8 @@ const HARD = [
     ],
     blink: { period: 1.6, warn: 0.45 },
     hazards: [
-      { type: 'bounce', x: 5, y: 7, dx: -1, dy: 0, speed: 3.5 },
-      { type: 'bounce', x: 3, y: 0, dx: 0, dy: 1, speed: 3.5 },
+      { type: 'bounce', x: 5, y: 7, dx: -1, dy: 0, speed: 3.1 },
+      { type: 'bounce', x: 3, y: 0, dx: 0, dy: 1, speed: 3.1 },
     ],
   },
   {
@@ -553,9 +577,9 @@ const HARD = [
       'G.P.B.',
     ],
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.5 },
-      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1.3 },
-      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 4 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.3 },
+      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1.1 },
+      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 3.5 },
     ],
   },
   {
@@ -572,9 +596,9 @@ const HARD = [
       '..P.B.',
     ],
     hazards: [
-      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.5 },
-      { type: 'chase', x: 5, y: 0, speed: 2.1 },
-      { type: 'bounce', x: 1, y: 5, dx: 1, dy: 0, speed: 4 },
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.3 },
+      { type: 'bounce', x: 5, y: 0, dx: 0, dy: 1, speed: 2.5 },
+      { type: 'bounce', x: 1, y: 5, dx: 1, dy: 0, speed: 3.5 },
     ],
   },
   {
@@ -591,9 +615,9 @@ const HARD = [
       'B.P..B',
     ],
     hazards: [
-      { type: 'chase', x: 5, y: 0, speed: 2 },
-      { type: 'chase', x: 0, y: 2, speed: 1.8 },
-      { type: 'bounce', x: 3, y: 3, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 5, y: 0, dx: -1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 0, y: 2, dx: 1, dy: 0, speed: 2.2 },
+      { type: 'bounce', x: 3, y: 3, dx: 1, dy: 0, speed: 3.5 },
     ],
   },
   {
@@ -610,12 +634,12 @@ const HARD = [
       '..P...',
     ],
     hazards: [
-      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 0, speed: 5.2 },
-      { type: 'bounce', x: 5, y: 3, dx: -1, dy: 0, speed: 5.2 },
-      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 5.2 },
-      { type: 'bounce', x: 1, y: 2, dx: 0, dy: 1, speed: 3.5 },
-      { type: 'bounce', x: 4, y: 4, dx: 0, dy: -1, speed: 3.5 },
-      { type: 'bounce', x: 2, y: 5, dx: 1, dy: -1, speed: 4 },
+      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 0, speed: 4.6 },
+      { type: 'bounce', x: 5, y: 3, dx: -1, dy: 0, speed: 4.6 },
+      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 4.6 },
+      { type: 'bounce', x: 1, y: 2, dx: 0, dy: 1, speed: 3.1 },
+      { type: 'bounce', x: 4, y: 4, dx: 0, dy: -1, speed: 3.1 },
+      { type: 'bounce', x: 2, y: 5, dx: 1, dy: -1, speed: 3.5 },
     ],
   },
   {
@@ -633,8 +657,8 @@ const HARD = [
     ],
     blink: { period: 1.8, warn: 0.45 },
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.4 },
-      { type: 'chase', x: 3, y: 2, speed: 2 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'bounce', x: 3, y: 2, dx: 1, dy: 0, speed: 2.5 },
     ],
   },
   {
@@ -651,11 +675,11 @@ const HARD = [
       'B.P..B',
     ],
     hazards: [
-      { type: 'bounce', x: 1, y: 0, dx: 1, dy: 1, speed: 4.6 },
-      { type: 'bounce', x: 4, y: 0, dx: -1, dy: 1, speed: 4.6 },
-      { type: 'bounce', x: 0, y: 5, dx: 1, dy: -1, speed: 4.6 },
-      { type: 'bounce', x: 5, y: 3, dx: -1, dy: 1, speed: 4 },
-      { type: 'chase', x: 5, y: 6, speed: 1.7 },
+      { type: 'bounce', x: 1, y: 0, dx: 1, dy: 1, speed: 4 },
+      { type: 'bounce', x: 4, y: 0, dx: -1, dy: 1, speed: 4 },
+      { type: 'bounce', x: 0, y: 5, dx: 1, dy: -1, speed: 4 },
+      { type: 'bounce', x: 5, y: 3, dx: -1, dy: 1, speed: 3.5 },
+      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 2.1 },
     ],
   },
   {
@@ -673,9 +697,9 @@ const HARD = [
     ],
     blink: { period: 1.8, warn: 0.45 },
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.4 },
-      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1.2 },
-      { type: 'chase', x: 3, y: 0, speed: 1.9 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1.1 },
+      { type: 'bounce', x: 3, y: 0, dx: 1, dy: 0, speed: 2.4 },
     ],
   },
   {
@@ -692,10 +716,10 @@ const HARD = [
       'B.P..B',
     ],
     hazards: [
-      { type: 'chase', x: 0, y: 1, speed: 2.2 },
-      { type: 'chase', x: 5, y: 1, speed: 2 },
-      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 4.6 },
-      { type: 'bounce', x: 1, y: 5, dx: 1, dy: 0, speed: 4.6 },
+      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 0, speed: 2.7 },
+      { type: 'bounce', x: 5, y: 1, dx: -1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 1, y: 5, dx: 1, dy: 0, speed: 4 },
     ],
   },
   {
@@ -713,11 +737,11 @@ const HARD = [
     ],
     blink: { period: 1.6, warn: 0.45 },
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.5 },
-      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.3 },
-      { type: 'chase', x: 4, y: 2, speed: 2.2 },
-      { type: 'bounce', x: 3, y: 1, dx: 1, dy: 0, speed: 4.6 },
-      { type: 'bounce', x: 3, y: 5, dx: 1, dy: 0, speed: 4.6 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.3 },
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.1 },
+      { type: 'bounce', x: 4, y: 2, dx: 1, dy: 0, speed: 2.7 },
+      { type: 'bounce', x: 3, y: 1, dx: 1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 3, y: 5, dx: 1, dy: 0, speed: 4 },
     ],
   },
 ];
@@ -738,10 +762,10 @@ const EXPERT = [
       '..P...',
     ],
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.6 },
-      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.4 },
-      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 5 },
-      { type: 'chase', x: 5, y: 0, speed: 2.2 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.4 },
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'bounce', x: 0, y: 3, dx: 1, dy: 0, speed: 4.3 },
+      { type: 'bounce', x: 5, y: 0, dx: -1, dy: 0, speed: 2.7 },
     ],
   },
   {
@@ -758,9 +782,9 @@ const EXPERT = [
       '..P...',
     ],
     hazards: [
-      { type: 'chase', x: 5, y: 0, speed: 2.2 },
-      { type: 'chase', x: 0, y: 4, speed: 2 },
-      { type: 'bounce', x: 0, y: 2, dx: 1, dy: 0, speed: 4.5 },
+      { type: 'bounce', x: 5, y: 0, dx: -1, dy: 0, speed: 2.7 },
+      { type: 'bounce', x: 0, y: 4, dx: 1, dy: 0, speed: 2.4 },
+      { type: 'bounce', x: 0, y: 2, dx: 1, dy: 0, speed: 3.8 },
     ],
   },
   {
@@ -778,7 +802,7 @@ const EXPERT = [
     ],
     blink: { period: 1.7, warn: 0.4 },
     hazards: [
-      { type: 'chase', x: 5, y: 7, speed: 2 },
+      { type: 'bounce', x: 5, y: 7, dx: 0, dy: -1, speed: 2.4 },
     ],
   },
   {
@@ -795,10 +819,10 @@ const EXPERT = [
       'G.P..G',
     ],
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.6 },
-      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1.5 },
-      { type: 'bounce', x: 0, y: 2, dx: 1, dy: 0, speed: 5 },
-      { type: 'bounce', x: 5, y: 5, dx: -1, dy: 0, speed: 5 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.4 },
+      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1.3 },
+      { type: 'bounce', x: 0, y: 2, dx: 1, dy: 0, speed: 4.3 },
+      { type: 'bounce', x: 5, y: 5, dx: -1, dy: 0, speed: 4.3 },
     ],
   },
   {
@@ -815,11 +839,11 @@ const EXPERT = [
       '..P...',
     ],
     hazards: [
-      { type: 'bounce', x: 1, y: 0, dx: 1, dy: 1, speed: 5 },
-      { type: 'bounce', x: 4, y: 0, dx: -1, dy: 1, speed: 5 },
-      { type: 'bounce', x: 0, y: 3, dx: 1, dy: -1, speed: 4.5 },
-      { type: 'bounce', x: 5, y: 4, dx: -1, dy: 1, speed: 4.5 },
-      { type: 'chase', x: 5, y: 6, speed: 1.8 },
+      { type: 'bounce', x: 1, y: 0, dx: 1, dy: 1, speed: 4.3 },
+      { type: 'bounce', x: 4, y: 0, dx: -1, dy: 1, speed: 4.3 },
+      { type: 'bounce', x: 0, y: 3, dx: 1, dy: -1, speed: 3.8 },
+      { type: 'bounce', x: 5, y: 4, dx: -1, dy: 1, speed: 3.8 },
+      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 2.1 },
     ],
   },
   {
@@ -836,9 +860,9 @@ const EXPERT = [
       'BBP.GB',
     ],
     hazards: [
-      { type: 'chase', x: 0, y: 0, speed: 2.4 },
-      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 5 },
-      { type: 'bounce', x: 0, y: 2, dx: 0, dy: 1, speed: 4 },
+      { type: 'bounce', x: 0, y: 0, dx: 1, dy: 0, speed: 2.8 },
+      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 4.3 },
+      { type: 'bounce', x: 0, y: 2, dx: 0, dy: 1, speed: 3.4 },
     ],
   },
   {
@@ -855,9 +879,9 @@ const EXPERT = [
       'BGP.GB',
     ],
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.5 },
-      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.4 },
-      { type: 'bounce', x: 1, y: 3, dx: 1, dy: 0, speed: 5 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.3 },
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'bounce', x: 1, y: 3, dx: 1, dy: 0, speed: 4.3 },
     ],
   },
   {
@@ -874,9 +898,9 @@ const EXPERT = [
       'B.P.BB',
     ],
     hazards: [
-      { type: 'chase', x: 0, y: 0, speed: 2.1 },
-      { type: 'chase', x: 5, y: 0, speed: 1.9 },
-      { type: 'chase', x: 5, y: 3, speed: 1.7 },
+      { type: 'bounce', x: 0, y: 0, dx: 1, dy: 0, speed: 2.5 },
+      { type: 'bounce', x: 5, y: 0, dx: -1, dy: 0, speed: 2.2 },
+      { type: 'bounce', x: 5, y: 3, dx: 0, dy: 1, speed: 2 },
     ],
   },
   {
@@ -894,8 +918,8 @@ const EXPERT = [
     ],
     blink: { period: 1.7, warn: 0.4 },
     hazards: [
-      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.4 },
-      { type: 'chase', x: 5, y: 1, speed: 1.9 },
+      { type: 'sweep', axis: 'col', pos: 0, dir: 1, speed: 1.2 },
+      { type: 'bounce', x: 5, y: 1, dx: -1, dy: 0, speed: 2.2 },
     ],
   },
   {
@@ -912,10 +936,10 @@ const EXPERT = [
       '..P...',
     ],
     hazards: [
-      { type: 'bounce', x: 0, y: 0, dx: 1, dy: 0, speed: 5.5 },
-      { type: 'bounce', x: 0, y: 2, dx: 1, dy: 0, speed: 5 },
-      { type: 'bounce', x: 5, y: 4, dx: -1, dy: 0, speed: 5 },
-      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 4 },
+      { type: 'bounce', x: 0, y: 0, dx: 1, dy: 0, speed: 4.7 },
+      { type: 'bounce', x: 0, y: 2, dx: 1, dy: 0, speed: 4.3 },
+      { type: 'bounce', x: 5, y: 4, dx: -1, dy: 0, speed: 4.3 },
+      { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 3.4 },
     ],
   },
   {
@@ -933,10 +957,10 @@ const EXPERT = [
     ],
     blink: { period: 1.6, warn: 0.4 },
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.6 },
-      { type: 'chase', x: 3, y: 0, speed: 2.2 },
-      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 5 },
-      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 1, speed: 4.5 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.4 },
+      { type: 'bounce', x: 3, y: 0, dx: 1, dy: 0, speed: 2.7 },
+      { type: 'bounce', x: 1, y: 4, dx: 1, dy: 0, speed: 4.3 },
+      { type: 'bounce', x: 0, y: 1, dx: 1, dy: 1, speed: 3.8 },
     ],
   },
   {
@@ -954,20 +978,25 @@ const EXPERT = [
     ],
     blink: { period: 1.5, warn: 0.4 },
     hazards: [
-      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.7 },
-      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1.5 },
-      { type: 'chase', x: 3, y: 2, speed: 2.3 },
-      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 5.5 },
-      { type: 'bounce', x: 5, y: 2, dx: 0, dy: 1, speed: 4 },
+      { type: 'sweep', axis: 'row', pos: 0, dir: 1, speed: 1.4 },
+      { type: 'sweep', axis: 'col', pos: 5, dir: -1, speed: 1.3 },
+      { type: 'bounce', x: 3, y: 2, dx: 1, dy: 0, speed: 2.8 },
+      { type: 'bounce', x: 0, y: 5, dx: 1, dy: 0, speed: 4.7 },
+      { type: 'bounce', x: 5, y: 2, dx: 0, dy: 1, speed: 3.4 },
     ],
   },
 ];
 
 // 난이도 구간 (스테이지 번호는 0부터 이어짐: 초급 0~11, 중급 12~23, 고급 24~35, 특급 36~47)
+// walls: 판 둘레 벽이 남아 있는 비율 [1스테이지, 12스테이지] (그 사이는 스테이지 번호에 따라 점점 듬성듬성)
+//   벽이 있으면 막히고, 뚫린 곳으로 가면 판 밖으로 떨어져 생명 1개를 잃음
+// tilt: 판이 기울어짐 (볼이 낮은 쪽으로 저절로 굴러감)
+//   dirs = 기우는 방향 종류 ('h' 좌우, 'v' 위아래, 'd' 대각선) 중 랜덤
+//   angle = 기울기 [최소, 최대]° (12스테이지는 +stepUp°까지 점점 더), tilted = 기울어 있는 시간, flat = 평평한 시간 (초, 랜덤)
 const TIERS = [
-  { name: 'EASY', stages: EASY },
-  { name: 'NORMAL', stages: NORMAL },
-  { name: 'HARD', stages: HARD },
-  { name: 'EXPERT', stages: EXPERT },
+  { name: 'EASY', stages: EASY, walls: [1, 0.6], tilt: null }, // 초급은 판이 안 기울어짐
+  { name: 'NORMAL', stages: NORMAL, walls: [0.8, 0.5], tilt: { dirs: ['h', 'v'], angle: [5, 10], stepUp: 2, tilted: [2, 4], flat: [3, 7] } },
+  { name: 'HARD', stages: HARD, walls: [0.65, 0.35], tilt: { dirs: ['h', 'v', 'd'], angle: [7, 13], stepUp: 2, tilted: [2.5, 5], flat: [2.5, 6] } },
+  { name: 'EXPERT', stages: EXPERT, walls: [0.5, 0.2], tilt: { dirs: ['h', 'v', 'd'], angle: [9, 16], stepUp: 2, tilted: [3, 6], flat: [2, 5] } },
 ];
 const STAGES = TIERS.flatMap((t) => t.stages);

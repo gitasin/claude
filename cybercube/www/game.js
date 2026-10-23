@@ -7,6 +7,8 @@
   const BLUE_SHUFFLE_TIME = 5;  // 남은 파랑을 다른 칸으로 옮기는 주기 (초)
   const BLUE_SHUFFLE_WARN = 1;
   const MODAL_GUARD_MS = 400;
+  const WALL_ROOM = 28;         // 판 바깥 벽이 들어갈 여백 (px, 양쪽 합)
+  const FALL_MS = 700;          // 판 밖으로 떨어지는 연출 시간
   const DRAG_STEP = 0.075;      // 공을 끌 때 한 칸 이동 간격 (초)
   const DRAG_GRAB = 1.0;        // 공 중심에서 이 칸 수 안을 터치하면 '공 잡기'
   const DRAG_HYSTERESIS = 0.15; // 목표 칸이 바뀌려면 칸 경계를 이만큼(칸 비율) 더 넘어야 함 → 경계에서 안 떨림   // 창이 뜬 뒤 이 시간 동안은 버튼이 안 눌림  // 옮기기 전에 깜빡이는 시간 (초)
@@ -22,6 +24,7 @@
   const board = $('board');
   const playerEl = $('player');
   const countdownEl = $('countdown');
+  const clearBanner = $('clearBanner');
   const modal = $('modal');
 
   // ── 저장 ──
@@ -103,6 +106,14 @@
         tiles.push(ch === 'P' ? '.' : ch);
       }
     });
+    // 초록이 있으면 원래 시작 지점에서 가장 가까운 초록 칸에서 시작 (떨어져도 여기서 다시)
+    let bestG = -1, bestD = Infinity;
+    tiles.forEach((t, i) => {
+      if (t !== 'G') return;
+      const d = Math.hypot(i % COLS - px, Math.floor(i / COLS) - py) - Math.floor(i / COLS) * 0.001; // 같으면 아래 줄 쪽
+      if (d < bestD) { bestD = d; bestG = i; }
+    });
+    if (bestG >= 0) { px = bestG % COLS; py = Math.floor(bestG / COLS); }
 
     state = {
       n,
@@ -121,8 +132,14 @@
       pops: new Set(),
       shuffleSpec: def.shuffle ?? BLUE_SHUFFLE_TIME,     // 숫자 = 고정 주기, [최소, 최대] = 매번 랜덤
       shuffleLeft: nextShuffleTime(def.shuffle ?? BLUE_SHUFFLE_TIME), // 파랑이 옮겨지기까지 남은 시간
+      startX: px, startY: py,      // 시작 지점 (떨어지면 여기서 다시 시작)
+      tiltX: 0, tiltY: 0,          // 지금 기울기(°): tiltX +는 오른쪽이 낮음, tiltY +는 아래쪽이 낮음
+      rollAcc: 0,                  // 기울기로 굴러가는 진행도 (1이 되면 한 칸)
     };
+    setupWalls(n);
+    setupTilt(n);
 
+    stopCelebration();
     $('stageName').textContent = stageLabel(n);
     restorePlayer();
     progress.tab = tierOf(n).tier; // 나가면 이 스테이지의 난이도 탭이 보이게
@@ -230,13 +247,24 @@
     else if (!d.active) state.drag = null; // 막혀서 더 못 감
   }
 
-  function move(dx, dy) {
+  // glide: 기울기로 굴러갈 때 한 칸 걸리는 시간(초). 주면 칸 사이에서 멈추지 않고 이어서 굴러감
+  function move(dx, dy, glide = 0) {
     if (!state || state.phase !== 'play') return;
     const nx = state.px + dx;
     const ny = state.py + dy;
+    if (!inside(nx, ny)) {
+      if (wallBlocks(dx, dy)) wallHit(dx, dy);
+      else fallOff(dx, dy);
+      return;
+    }
     if (!canStep(nx, ny)) { bumpPlayer(dx, dy); return; }
     playerEl.classList.toggle('diag', dx !== 0 && dy !== 0); // 대각선은 거리가 길어서 애니메이션도 조금 길게
-    rollPlayer(playerEl, dx, dy);
+    playerEl.classList.toggle('glide', glide > 0);
+    if (glide > 0) playerEl.style.setProperty('--move', `${glide.toFixed(3)}s`);
+    else playerEl.style.removeProperty('--move');
+    state.resting = false;
+    if (!glide && !state.tiltX && !state.tiltY) state.rollVel = 0; // 평평할 때 직접 움직이면 굴러가던 힘은 멈춤
+    window.Orb.roll(playerEl, dx, dy, glide > 0 ? glide * 1000 : dx && dy ? 280 : 230);
     state.px = nx;
     state.py = ny;
     const i = idx(nx, ny);
@@ -247,7 +275,8 @@
       setTimeout(() => state && state.pops.delete(i), 350);
       sfx.blue();
       vibrate(10);
-      if (state.blueLeft === 0) { checkHit(); if (state.phase === 'play') clearStage(); render(); return; }
+      // 마지막 파랑이면 같은 칸에 빨강이 있어도 클리어가 먼저
+      if (state.blueLeft === 0) { if (state.phase === 'play') clearStage(); render(); return; }
     } else {
       sfx.step();
     }
@@ -260,10 +289,16 @@
     const i = idx(state.px, state.py);
     if (state.tiles[i] === 'G') return;
     if (redMap()[i] !== 2) return;
+    sfx.hit();
+    loseLife();
+  }
+
+  // 생명 1개 잃기 (빨강에 닿음 / 판 밖으로 떨어짐)
+  // fell = 판 밖으로 떨어져서 잃음 (마지막 생명이면 볼이 이미 안 보이므로 깨지는 연출 없이 실패)
+  function loseLife(fell = false) {
     state.lives--;
     state.hits++;
     state.invincible = INVINCIBLE_TIME;
-    sfx.hit();
     vibrate([60, 40, 60]);
     board.classList.remove('shake');
     void board.offsetWidth;
@@ -271,8 +306,8 @@
     updateHud();
     if (state.lives <= 0) {
       state.phase = 'breaking';
-      shatterPlayer();
-      setTimeout(() => { if (state && state.phase === 'breaking') failStage('outOfLife'); }, 1050);
+      if (!fell) shatterPlayer();
+      setTimeout(() => { if (state && state.phase === 'breaking') failStage('outOfLife'); }, fell ? 300 : 1050);
     } else {
       sfx.crack();
     }
@@ -320,6 +355,7 @@
   // 조각 치우고 새 금 모양 준비 (판 시작·이어하기)
   function restorePlayer() {
     window.Crack.reset(playerEl);
+    playerEl.classList.remove('falling'); // 떨어져서 끝난 판이면 다시 보이게
   }
 
   // 막힌 방향으로 밀면 그쪽으로 살짝 툭 부딪힘 (입력은 받았다는 표시)
@@ -332,14 +368,9 @@
     playerEl.classList.add('bump');
   }
 
-  // 육각형 굴리기: 오른쪽·아래로 가면 시계 방향, 왼쪽·위로 가면 반시계 방향으로 60°
+  // 크리스탈 볼 굴리기: 이동 방향으로 굴러간 각도만큼 3D로 회전 (orb.js)
   function rollPlayer(el, dx, dy) {
-    const turn = dx !== 0 ? Math.sign(dx) : Math.sign(dy);
-    el.rot = (el.rot || 0) + 60 * turn;
-    el.style.setProperty('--rot', `${el.rot}deg`);
-    el.classList.remove('rolling'); // 구를 때마다 '살짝 커졌다 돌아오기'를 처음부터 다시
-    void el.offsetWidth;
-    el.classList.add('rolling');
+    window.Orb.roll(el, dx, dy, dx && dy ? 280 : 230); // 이동보다 조금 길게 돌아서 회전이 눈에 보이게
   }
   window.rollPlayer = rollPlayer; // 시연 화면에서도 같이 씀
 
@@ -373,16 +404,18 @@
         state.drag.acc += dt;
         if (state.drag.acc >= DRAG_STEP) { state.drag.acc = 0; dragStep(); }
       }
+      updateTilt(dt);
       if (state.shuffleLeft > 0) {
         state.shuffleLeft -= dt;
         if (state.shuffleLeft <= 0) { shuffleBlue(); state.shuffleLeft += nextShuffleTime(state.shuffleSpec); }
       }
-      checkHit();
+      if (state.blueLeft === 0) clearStage(); // 혹시 파랑이 0인 채로 진행되면 바로 클리어 (광고로 이어한 뒤 등)
+      else checkHit();
       if (state.phase === 'play' && state.timeLeft <= 0) failStage('timeUp');
       updateHud();
     }
     render();
-    if (state.phase === 'ready' || state.phase === 'play') rafId = requestAnimationFrame(loop);
+    if (state.phase === 'ready' || state.phase === 'play' || state.phase === 'falling') rafId = requestAnimationFrame(loop);
   }
 
   // ── 그리기 ──
@@ -402,7 +435,7 @@
       if (state.drag && i === idx(state.drag.tx, state.drag.ty) && i !== idx(state.px, state.py)) cls += ' target';
       if (cls !== cellClass[i]) { cells[i].className = cls; cellClass[i] = cls; }
     }
-    playerEl.style.transform = `translate(${state.px * 100}%, ${state.py * 100}%)`;
+    if (state.phase !== 'falling') playerEl.style.transform = `translate(${state.px * 100}%, ${state.py * 100}%)`; // 떨어지는 중엔 판 밖 자리 그대로
     playerEl.classList.toggle('invincible', state.invincible > 0);
     const crack = String(Math.min(2, MAX_LIVES - state.lives));
     if (playerEl.dataset.crack !== crack) {
@@ -419,7 +452,7 @@
     $('blueLeft').textContent = state.blueLeft;
     $('timeLeft').textContent = Math.max(0, Math.ceil(state.timeLeft));
     $('lives').textContent = '♥'.repeat(state.lives) + '♡'.repeat(MAX_LIVES - state.lives);
-    const ratio = Math.max(0, state.timeLeft / state.def.time);
+    const ratio = Math.min(1, Math.max(0, state.timeLeft / state.def.time));
     const fill = $('timeFill');
     fill.style.width = `${ratio * 100}%`;
     fill.classList.toggle('low', ratio < 0.25);
@@ -428,7 +461,7 @@
   function resizeBoard() {
     const w = boardWrap.clientWidth;
     const h = boardWrap.clientHeight;
-    const size = Math.min(w / COLS, h / ROWS);
+    const size = Math.min((w - WALL_ROOM) / COLS, (h - WALL_ROOM) / ROWS); // 바깥 벽 자리
     board.style.width = `${size * COLS}px`;
     board.style.height = `${size * ROWS}px`;
   }
@@ -436,18 +469,19 @@
   // ── 클리어 / 실패 / 일시정지 ──
   function clearStage() {
     state.phase = 'clear';
+    levelBoard(); // 기울어 있었으면 평평하게
+    updateHud(); // 마지막 파랑까지 0으로
     window.Ads.countResult();
     const n = state.n;
     const ms = Math.max(3000, Math.round(state.clock * 1000));
     const score = ms + state.hits * HIT_PENALTY_MS;
-    sfx.clear();
     vibrate(80);
 
     // 광고 보고 이어한 판: 별 1개, 기록·랭킹에는 안 남김
     if (state.continued) {
       progress.stars[n] = Math.max(progress.stars[n] || 0, 1);
       save();
-      showModal(t('clear'), `${fmt(score)} · ${t('continued')}`, 1, resultButtons(n));
+      celebrate(() => showModal(t('clear'), `${fmt(score)} · ${t('continued')}`, 1, resultButtons(n)));
       return;
     }
 
@@ -455,20 +489,309 @@
     const prevBest = progress.best[n];
     const newBest = prevBest == null || score < prevBest;
     progress.stars[n] = Math.max(progress.stars[n] || 0, stars);
-    if (newBest) progress.best[n] = score;
+    if (newBest) progress.best[n] = score; // 기록은 바로 저장 (연출 중에 나가도 남음)
     save();
     const penalty = state.hits ? ` (+${state.hits * 5}s)` : '';
-    showModal(t('clear'), `${fmt(score)}${penalty}${newBest ? ` · ${t('newBest')}` : ''}`, stars, resultButtons(n));
+    const hits = state.hits;
+    const submitted = window.cloud ? window.cloud.submit(n, { name: playerName(), score, ms, hits }) : null;
 
-    // 랭킹에 올리고 순위 표시
-    if (!window.cloud) return;
-    const token = rankToken;
-    const body = $('modalBody');
-    body.innerHTML = `<p class="rank-line">${t('rank')} …</p>`;
-    window.cloud.submit(n, { name: playerName(), score, ms, hits: state.hits }).then((rank) => {
-      if (token !== rankToken) return; // 그새 다른 화면으로 바뀜
-      body.innerHTML = rank ? `<p class="rank-line">${t('rank')} <b>#${rank}</b></p>` : '';
+    celebrate(() => {
+      showModal(t('clear'), `${fmt(score)}${penalty}${newBest ? ` · ${t('newBest')}` : ''}`, stars, resultButtons(n));
+      // 랭킹 순위 표시
+      if (!submitted) return;
+      const token = rankToken;
+      const body = $('modalBody');
+      body.innerHTML = `<p class="rank-line">${t('rank')} …</p>`;
+      submitted.then((rank) => {
+        if (token !== rankToken) return; // 그새 다른 화면으로 바뀜
+        body.innerHTML = rank ? `<p class="rank-line">${t('rank')} <b>#${rank}</b></p>` : '';
+      });
     });
+  }
+
+  // ── 판 둘레 벽 ──
+  // 위·아래 각 COLS개, 왼쪽·오른쪽 각 ROWS개 조각. 스테이지마다 정해진 자리가 뚫려 있음 (같은 판은 늘 같은 모양)
+  // 시작 위치 바로 옆 벽은 항상 막음 (시작하자마자 떨어지지 않게)
+  const wallEls = { top: [], bottom: [], left: [], right: [] };
+  function buildWalls() {
+    Object.keys(wallEls).forEach((side) => {
+      const count = side === 'top' || side === 'bottom' ? COLS : ROWS;
+      for (let i = 0; i < count; i++) {
+        const w = document.createElement('div');
+        w.className = `wall ${side}`;
+        w.style.setProperty('--i', i);
+        board.appendChild(w);
+        wallEls[side].push(w);
+      }
+    });
+  }
+
+  // 스테이지 번호로 정해지는 난수 (같은 스테이지는 늘 같은 벽)
+  function seeded(seed) {
+    let t = seed * 2654435761 >>> 0;
+    return () => { t = (t + 0x6d2b79f5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
+  }
+
+  function setupWalls(n) {
+    const { tier, num } = tierOf(n);
+    const k = (num - 1) / Math.max(1, TIERS[tier].stages.length - 1);
+    const [from, to] = TIERS[tier].walls || [1, 1];
+    const keep = from + (to - from) * k; // 남길 벽 비율
+    const all = [];
+    Object.keys(wallEls).forEach((side) => wallEls[side].forEach((_, i) => all.push([side, i])));
+    const isProtected = ([side, i]) =>
+      (side === 'bottom' && state.py === ROWS - 1 && Math.abs(i - state.px) <= 1) ||
+      (side === 'top' && state.py === 0 && Math.abs(i - state.px) <= 1) ||
+      (side === 'left' && state.px === 0 && Math.abs(i - state.py) <= 1) ||
+      (side === 'right' && state.px === COLS - 1 && Math.abs(i - state.py) <= 1);
+    const rand = seeded(n + 7);
+    const removable = all.filter((w) => !isProtected(w));
+    for (let i = removable.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [removable[i], removable[j]] = [removable[j], removable[i]]; }
+    const gaps = new Set(removable.slice(0, Math.round(all.length * (1 - keep))).map(([s, i]) => `${s}${i}`));
+    state.walls = { top: [], bottom: [], left: [], right: [] };
+    Object.keys(wallEls).forEach((side) => wallEls[side].forEach((el, i) => {
+      const solid = !gaps.has(`${side}${i}`);
+      state.walls[side][i] = solid;
+      el.classList.toggle('gap', !solid);
+    }));
+  }
+
+  function wallHit(dx, dy) {
+    sfx.wall();
+    vibrate(25);
+    playerEl.style.setProperty('--bx', dx);
+    playerEl.style.setProperty('--by', dy);
+    playerEl.style.setProperty('--sqx', dx ? 0.78 : 1.12); // 부딪힌 방향으로 납작해지고 옆으로 퍼짐
+    playerEl.style.setProperty('--sqy', dy ? 0.78 : 1.12);
+    playerEl.classList.remove('wallhit', 'bump');
+    void playerEl.offsetWidth;
+    playerEl.classList.add('wallhit');
+    // 부딪힌 벽 조각
+    const nx = state.px + dx;
+    const ny = state.py + dy;
+    const segs = [];
+    if (nx < 0 || nx >= COLS) segs.push(wallEls[nx < 0 ? 'left' : 'right'][state.py]);
+    if (ny < 0 || ny >= ROWS) segs.push(wallEls[ny < 0 ? 'top' : 'bottom'][state.px]);
+    segs.forEach((w) => {
+      if (!w || w.classList.contains('gap')) return;
+      w.classList.remove('hit');
+      void w.offsetWidth;
+      w.classList.add('hit');
+    });
+  }
+
+  // 판 밖으로 나가려 할 때 막히는지. 모서리를 대각선으로 나가면 두 벽이 모두 뚫려 있어야 떨어짐
+  function wallBlocks(dx, dy) {
+    const nx = state.px + dx;
+    const ny = state.py + dy;
+    const outX = nx < 0 || nx >= COLS;
+    const outY = ny < 0 || ny >= ROWS;
+    const solidX = outX && state.walls[nx < 0 ? 'left' : 'right'][state.py];
+    const solidY = outY && state.walls[ny < 0 ? 'top' : 'bottom'][state.px];
+    if (outX && outY) return solidX || solidY;
+    return outX ? solidX : solidY;
+  }
+
+  // 뚫린 벽으로 나가면: 판 밖으로 굴러 나가 아래로 떨어지듯 사라짐 → 생명 1개 잃고 스테이지 시작 지점에서 다시 나타남
+  function fallOff(dx, dy) {
+    const st = state;
+    st.phase = 'falling';
+    st.drag = null;
+    st.rollVel = 0; // 다시 나타나면 처음부터
+    st.rollAcc = 0;
+    sfx.drop();
+    playerEl.style.setProperty('--fdx', dx);
+    playerEl.style.setProperty('--fdy', dy);
+    playerEl.classList.remove('glide', 'wallhit', 'bump', 'respawn'); // 떨어짐 애니메이션을 가리지 않게
+    playerEl.style.removeProperty('--move');
+    playerEl.style.transform = `translate(${(st.px + dx * 0.85) * 100}%, ${(st.py + dy * 0.85) * 100}%)`; // 가장자리 밖으로 굴러 나감
+    window.Orb.roll(playerEl, dx, dy, 700); // 떨어지면서도 굴러감
+    playerEl.classList.add('falling');
+    setTimeout(() => {
+      if (state !== st || st.phase !== 'falling') return;
+      // 마지막 생명이면 다시 나타나지 않고 떨어진 채로 끝 (시작 지점에서 깨지지 않게)
+      if (st.lives <= 1) { loseLife(true); return; }
+      playerEl.classList.remove('falling');
+      playerEl.classList.add('snap'); // 시작 지점으로는 미끄러지지 않고 바로
+      st.px = st.startX;
+      st.py = st.startY;
+      st.phase = 'play';
+      render();
+      void playerEl.offsetWidth;
+      playerEl.classList.remove('snap');
+      playerEl.classList.remove('respawn');
+      void playerEl.offsetWidth;
+      playerEl.classList.add('respawn');
+      loseLife();
+      lastTime = performance.now();
+    }, FALL_MS);
+  }
+
+  // ── 판 기울기 (중급·고급·특급) ──
+  // 평평 → (랜덤 시간 뒤) 왼쪽 또는 오른쪽으로 기울어짐 → (랜덤 시간 뒤) 다시 평평 … 반복
+  // 기울어 있는 동안 볼은 낮은 쪽으로 저절로 한 칸씩 굴러감 (많이 기울수록 빠르게)
+  // 굴러가다 파랑을 밟고, 빨강에 맞고, 뚫린 벽이면 떨어짐. 벽·구멍에 막히면 그 자리에서 멈춤
+  const rand = (a, b) => a + Math.random() * (b - a);
+  function setupTilt(n) {
+    const tl = TIERS[tierOf(n).tier].tilt || null;
+    state.tiltCfg = tl;
+    state.tiltPhase = 'flat';
+    state.tiltLeft = tl ? rand(tl.flat[0], tl.flat[1]) : 0;
+    if (tl) {
+      const { tier, num } = tierOf(n);
+      state.tiltBonus = ((num - 1) / Math.max(1, TIERS[tier].stages.length - 1)) * (tl.stepUp || 0); // 뒤 스테이지일수록 더 기울어짐
+    }
+    levelBoard();
+  }
+
+  // 기울기 모습: 화면에서는 실제 각도의 2.4배(최대 30°) → 작은 각도도 기울어진 게 확실히 보임
+  // ax: +는 오른쪽이 낮음, ay: +는 아래쪽이 낮음. 낮아진 쪽은 멀어져 작고 어둡게, 판 그림자도 그쪽으로 (style.css의 .tilted)
+  // 시연 화면에서도 같이 씀
+  function tiltVisual(el, ax, ay) {
+    const sx = Math.max(-30, Math.min(30, ax * 2.4));
+    const sy = Math.max(-30, Math.min(30, ay * 2.4));
+    const on = ax !== 0 || ay !== 0;
+    el.style.transform = on ? `perspective(700px) rotateX(${(-sy).toFixed(1)}deg) rotateY(${sx.toFixed(1)}deg)` : '';
+    el.classList.toggle('tilted', on);
+    if (!on) return;
+    el.style.setProperty('--tilt-amt', Math.min(1, Math.hypot(sx, sy) / 24).toFixed(2));
+    el.style.setProperty('--tilt-dir', `${Math.round((Math.atan2(ax, -ay) * 180) / Math.PI)}deg`); // 그라데이션: 높은 쪽 → 낮은 쪽
+    el.style.setProperty('--tsx', Math.sign(ax));
+    el.style.setProperty('--tsy', Math.sign(ay));
+  }
+  window.tiltVisual = tiltVisual;
+  window.__cc = () => state; // 시험용 (자동 시험에서 상태 확인)
+
+  function setTilt(ax, ay) {
+    state.tiltX = ax;
+    state.tiltY = ay;
+    tiltVisual(board, ax, ay);
+  }
+
+  function levelBoard() {
+    if (state) { state.tiltX = 0; state.tiltY = 0; state.rollAcc = 0; state.rollVel = 0; }
+    tiltVisual(board, 0, 0);
+  }
+
+  // 굴러갈 수 있는 한 칸 (판 밖이면 뚫린 벽일 때만 = 떨어짐)
+  const rollable = (dx, dy) => {
+    const nx = state.px + dx;
+    const ny = state.py + dy;
+    return inside(nx, ny) ? canStep(nx, ny) : !wallBlocks(dx, dy);
+  };
+
+  function updateTilt(dt) {
+    const tl = state.tiltCfg;
+    if (!tl) return;
+    state.tiltLeft -= dt;
+    if (state.tiltLeft <= 0) {
+      if (state.tiltPhase === 'flat') {
+        state.tiltPhase = 'tilted';
+        const deg = rand(tl.angle[0], tl.angle[1]) + state.tiltBonus;
+        const kinds = tl.dirs || ['h'];
+        const kind = kinds[Math.floor(Math.random() * kinds.length)];
+        const sx = Math.random() < 0.5 ? -1 : 1;
+        const sy = Math.random() < 0.5 ? -1 : 1;
+        if (kind === 'h') setTilt(sx * deg, 0);
+        else if (kind === 'v') setTilt(0, sy * deg);
+        else setTilt(sx * deg * 0.75, sy * deg * 0.75); // 대각선: 두 방향으로 나눠서 (전체 기울기는 비슷하게)
+        state.tiltLeft = rand(tl.tilted[0], tl.tilted[1]);
+        state.rollAcc = 0;
+        state.rollVel = 0;
+        state.rollWait = 0.45; // 판이 기울어지는 동안은 잠깐 기다렸다 굴러감
+        state.resting = false;
+        sfx.tilt();
+      } else {
+        state.tiltPhase = 'flat';
+        setTilt(0, 0); // 굴러가던 힘(rollVel)은 남겨서 조금 더 굴러가다 멈춤 (coast)
+        state.tiltLeft = rand(tl.flat[0], tl.flat[1]);
+      }
+    }
+    if (!state.tiltX && !state.tiltY) { coast(dt); return; }
+    if (state.rollWait > 0) { state.rollWait -= dt; return; }
+    // 중력처럼 점점 빨라짐: 작은 기울기도 금방 굴러가게 (3° → 최고 약 3칸/초, 10° → 5칸/초, 최대 6칸/초)
+    const a = Math.hypot(state.tiltX, state.tiltY);
+    const sx = Math.sign(state.tiltX);
+    const sy = Math.sign(state.tiltY);
+    // 낮은 쪽으로 한 칸. 대각선이 막히면 벽을 따라 미끄러지듯 가로·세로 중 갈 수 있는 쪽
+    const tries = sx && sy ? [[sx, sy], [sx, 0], [0, sy]] : [[sx, sy]];
+    const step = tries.find(([dx, dy]) => rollable(dx, dy));
+    if (!step) {
+      // 벽·막힌 블록: 굴러오던 힘이 있으면 한 번 부딪혀 튕기고, 그다음엔 기대어 멈춤
+      if (!state.resting && state.rollVel > 0.6) {
+        const [dx, dy] = tries[0];
+        if (!inside(state.px + dx, state.py + dy)) wallHit(dx, dy); else bumpPlayer(dx, dy);
+      }
+      state.resting = true;
+      state.rollVel = 0;
+      state.rollAcc = 0;
+      return;
+    }
+    state.rollVel = Math.min(Math.min(6, 2 + a * 0.3), state.rollVel + (2 + a * 0.4) * dt);
+    state.rollDir = step;
+    rollOn(step, dt);
+  }
+
+  // 굴러가는 힘만큼 앞으로. 한 칸만큼 모이면 다음 칸으로 (판 밖이고 벽이 없으면 떨어짐)
+  function rollOn([dx, dy], dt) {
+    state.rollAcc += state.rollVel * dt;
+    if (state.rollAcc < 1) return;
+    state.rollAcc -= 1;
+    if (!inside(state.px + dx, state.py + dy)) fallOff(dx, dy);
+    else move(dx, dy, Math.min(0.7, Math.max(0.12, 1 / state.rollVel))); // 다음 칸까지 이어서 굴러감
+  }
+
+  // 판이 평평해진 뒤: 굴러가던 방향으로 마찰에 점점 느려지며 조금 더 굴러감
+  function coast(dt) {
+    if (!(state.rollVel > 0) || !state.rollDir) return;
+    state.rollVel -= 4 * dt;
+    const [dx, dy] = state.rollDir;
+    if (state.rollVel <= 0.3 || !rollable(dx, dy)) { state.rollVel = 0; state.rollAcc = 0; return; }
+    rollOn(state.rollDir, dt);
+  }
+
+
+  // ── 클리어 연출: 바닥 전체가 아래 → 위로 한 번 차오르며 옅은 파랑 → 짙은 파랑 (약 3초) → "클리어!" → 결과 창 ──
+  // 연출 중에 판을 탭하면 바로 결과 창으로
+  const WAVE_MS = 3000;
+  const WAVE_ROW = 0.15; // 줄 사이 시차 (초)
+  const BANNER_MS = 1000;
+  let celebration = null; // { timers, finish }
+  // fail = true: 생명을 다 잃었을 때 (빨간색, "실패")
+  function celebrate(done, fail = false) {
+    // 칸마다 시작 시각: 아래 줄부터 한 줄에 WAVE_ROW초씩 늦게 → 한 번 아래에서 위로 차오름
+    cells.forEach((c, i) => {
+      c.style.setProperty('--wd', `${((ROWS - 1 - Math.floor(i / COLS)) * WAVE_ROW).toFixed(3)}s`);
+    });
+    board.classList.add('wave');
+    board.classList.toggle('wave-fail', fail);
+    if (!fail) sfx.wave(); // 실패는 "삐———"가 대신함
+    const finish = () => {
+      if (!celebration) return;
+      stopCelebration();
+      done();
+    };
+    celebration = {
+      finish,
+      timers: [
+        setTimeout(() => {
+          board.classList.remove('wave');
+          clearBanner.textContent = t(fail ? 'failed' : 'clear');
+          clearBanner.classList.toggle('fail', fail);
+          clearBanner.classList.remove('hidden');
+          if (!fail) sfx.clear();
+        }, WAVE_MS),
+        setTimeout(finish, WAVE_MS + BANNER_MS),
+      ],
+    };
+  }
+
+  function stopCelebration() {
+    if (!celebration) return;
+    celebration.timers.forEach(clearTimeout);
+    celebration = null;
+    board.classList.remove('wave', 'wave-fail');
+    clearBanner.classList.add('hidden');
   }
 
   // ── 랭킹 ──
@@ -569,11 +892,18 @@
 
   function failStage(reason) {
     state.phase = 'fail';
+    levelBoard();
     state.failReason = reason;
     window.Ads.countResult();
-    // 죽음(생명 0)은 깨진 뒤 긴 "삐———", 시간 초과는 "삐삐"
-    (reason === 'outOfLife' ? sfx.flatline : sfx.timeUp)();
-    showFailModal();
+    // 죽음(생명 0): 깨진 뒤 긴 "삐———" + 클리어와 같은 연출을 빨간색으로 → 실패 창
+    // 시간 초과: "삐삐" 하고 바로 실패 창
+    if (reason === 'outOfLife') {
+      sfx.flatline();
+      celebrate(showFailModal, true);
+    } else {
+      sfx.timeUp();
+      showFailModal();
+    }
   }
 
   function showFailModal() {
@@ -584,7 +914,7 @@
     const canContinue = window.Ads.isRelease(); // 이어한 뒤 또 실패해도 다시 광고로 이어할 수 있음
     showModal(t('failed'), t(state.failReason), null, [
       canContinue && [
-        life ? t('watchAdLife', { n: cfg.rewardedLife ?? 1 }) : t('watchAdTime', { n: cfg.rewardedTime ?? 15 }),
+        life ? t('watchAdLife', { n: cfg.rewardedLife ?? 3 }) : t('watchAdTime', { n: cfg.rewardedTime ?? 60 }),
         async () => {
           const ok = await window.Ads.showRewarded();
           if (ok) continueStage(life);
@@ -602,11 +932,22 @@
     state.continued = true;
     if (life) {
       restorePlayer();
-      state.lives = cfg.rewardedLife ?? 1;
+      state.lives = Math.min(MAX_LIVES, cfg.rewardedLife ?? 3);
       state.invincible = 2; // 이어하자마자 맞지 않게
     } else {
-      state.timeLeft += cfg.rewardedTime ?? 15;
+      state.timeLeft += cfg.rewardedTime ?? 60;
     }
+    // 이어할 때는 시작 지점(초록)에서 다시. 미끄러지지 않고 바로 옮김
+    state.px = state.startX;
+    state.py = state.startY;
+    state.drag = null;
+    state.rollVel = 0;
+    state.rollAcc = 0;
+    playerEl.classList.remove('falling'); // 떨어져서 끝났으면 다시 보이게
+    playerEl.classList.add('snap');
+    render();
+    void playerEl.offsetWidth;
+    playerEl.classList.remove('snap');
     closeModal();
     updateHud();
     state.phase = 'ready';
@@ -673,6 +1014,8 @@
 
   // ── 스테이지 선택 ──
   function showStages() {
+    stopCelebration();
+    levelBoard();
     cancelAnimationFrame(rafId);
     state = null;
     closeModal();
@@ -748,6 +1091,7 @@
     return [(e.clientX - r.left) / (r.width / COLS), (e.clientY - r.top) / (r.height / ROWS)];
   }
   boardWrap.addEventListener('pointerdown', (e) => {
+    if (celebration) { celebration.finish(); return; } // 클리어 연출 건너뛰기
     boardWrap.setPointerCapture(e.pointerId);
     if (state && (state.phase === 'play' || state.phase === 'ready')) {
       const [fx, fy] = fingerCell(e);
@@ -903,7 +1247,13 @@
     showPrivacy(() => showDemo(showStages, true));
   }
 
+  window.Orb.mount(playerEl);
+  // 한 번만 재생하는 효과(벽 튕김·부딪힘·다시 나타남)는 끝나면 표시를 지움 → 다음 효과를 가리지 않게
+  playerEl.addEventListener('animationend', (e) => {
+    if (e.target === playerEl && ['wallhit', 'bump', 'respawn'].includes(e.animationName)) playerEl.classList.remove(e.animationName);
+  });
   buildBoard();
+  buildWalls();
   if (introHidden()) showStages();
   else showIntro();
   window.cloud?.start(JSON.parse(JSON.stringify(progress)), applyCloudProgress);

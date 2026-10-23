@@ -170,6 +170,51 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
   /* 크기는 game.js의 resizeBoard()가 비율에 맞춰 지정 */
 }
 .board.shake { animation: shake 0.3s; }
+/* 기울기: 좌우로 입체적으로 스르륵 */
+/* 기울기: 끝에서 살짝 출렁이며 자리 잡음. 높은 쪽은 밝고 낮은 쪽은 어둡게, 그림자는 낮은 쪽으로 */
+.board { transition: transform 0.75s cubic-bezier(0.34, 1.35, 0.6, 1), box-shadow 0.75s; }
+.board::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.75s;
+}
+/* --tilt-dir: 높은 쪽 → 낮은 쪽 방향, --tsx/--tsy: 낮은 쪽 (-1, 0, 1) */
+.board.tilted::after { opacity: var(--tilt-amt, 0.5); background: linear-gradient(var(--tilt-dir, 90deg), rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 35%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.5)); }
+.board.tilted { box-shadow: 0 0 0 4px var(--frame, #24272f), calc(var(--tsx, 0) * 22px) calc(14px + var(--tsy, 0) * 16px) 34px rgba(0, 0, 0, 0.75); }
+/* 기울기로 굴러갈 땐 일정한 속도로 이어서 (칸마다 멈추지 않게) */
+.player.glide { --ease: linear; }
+
+/* 판 둘레 벽: 있으면 막힘, 뚫린 곳(gap)은 빨간 점선으로 위험 표시 → 그쪽으로 가면 떨어짐 */
+.wall {
+  position: absolute;
+  z-index: 1;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #8fa3c4, #4b5a78);
+  box-shadow: 0 0 0 1px #1a1f2c, 0 0 8px rgba(120, 170, 255, 0.35);
+}
+.wall.top, .wall.bottom { height: 7px; width: calc(100% / var(--cols) - 2px); left: calc(var(--i) * 100% / var(--cols) + 1px); }
+.wall.left, .wall.right { width: 7px; height: calc(100% / var(--rows) - 2px); top: calc(var(--i) * 100% / var(--rows) + 1px); }
+.wall.top { top: -12px; }
+.wall.bottom { bottom: -12px; }
+.wall.left { left: -12px; }
+.wall.right { right: -12px; }
+.wall.gap { background: none; box-shadow: 0 0 6px rgba(255, 45, 85, 0.45); border: 2px dashed rgba(255, 70, 105, 0.95); }
+
+/* 판 밖으로 떨어짐: 가장자리 밖으로 굴러 나간 뒤(0.15초) 중력처럼 점점 빨라지며 허공으로 떨어짐
+   (판 바깥쪽으로 멀어지며 작아지고 어두워지고 흐려짐) → 스테이지 시작 지점에서 다시 나타남 */
+.board .player.falling { animation: fall 0.7s linear forwards; } /* .board를 붙여 무적 깜빡임보다 우선 */
+.board .player.respawn { animation: respawn 0.4s ease-out; }
+@keyframes fall {
+  0%, 22% { scale: 1; opacity: 1; translate: 0 0; filter: brightness(1); animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
+  100% { scale: 0.2; opacity: 0; translate: calc(var(--fdx) * 55%) calc(var(--fdy) * 55%); filter: brightness(0.15) blur(2px); }
+}
+@keyframes respawn { 0% { scale: 0.3; opacity: 0; } 100% { scale: 1; opacity: 1; } }
+.player.snap { transition: none !important; }
+
 
 /* 칸 사이 간격은 ::before 안쪽 여백으로 (플레이어 위치 계산을 단순하게) */
 .cell { position: relative; }
@@ -205,7 +250,7 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
 /* ── 육각형 플레이어 ──
    .player       = 칸 이동 (translate)
      ::before    = 바닥 그림자 (회전 안 함)
-     .hex        = 몸체 + 금. 한 칸마다 60°씩 굴러감 (--rot, game.js가 지정)
+     .orb        = 크리스탈 볼 + 금 (굴러가는 표면 무늬는 orb.js가 3D로 그림)
                    빛 효과(filter)를 이 층에 두고 will-change로 GPU가 통째로 돌림 → 구를 때 다시 그리지 않음
      ::after     = 고정 조명 (왼쪽 위). 육각형은 60° 대칭이라 다 구르면 모양이 딱 겹침
    이동과 회전은 같은 시간·같은 곡선 → 칸에 도착하는 순간 회전도 끝남 */
@@ -230,46 +275,69 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
   inset: 22% 20% 12%;
   background: radial-gradient(ellipse at 50% 62%, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 65%);
 }
-.player .hex {
+/* 크리스탈 볼
+   .orb         = 볼 몸체 (둥글게 잘림). 판이 돌거나 뒤집힐 때만 --rot / --fx로 같이 돌아감
+   .orb-lines   = 표면의 크리스탈 절단선·반짝이 점 (orb.js가 굴러간 각도만큼 3D로 회전해 그림)
+   ::after      = 굴러도 제자리인 빛 (왼쪽 위 하이라이트, 가장자리 음영, 오른쪽 아래 굴절광) → 구르는 느낌 */
+.player .orb {
   position: absolute;
   inset: 18%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 42% 38%, #e4f7ff 0%, #a6daf3 45%, #5fa6d4 80%, #3d7fb0 100%);
   filter: var(--glow);
-  transform: rotate(var(--rot, 0deg));
-  transition: transform var(--move) var(--ease);
+  transform: rotate(var(--rot, 0deg)) scaleX(var(--fx, 1)); /* --fx: 판이 뒤집히면 좌우 반전 */
   will-change: transform;
 }
-.player .hex::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%);
-  /* 6개 옆면(살짝 다른 밝기) + 가운데 윗면 */
-  background:
-    radial-gradient(circle, #ffffff 0 29%, rgba(255, 255, 255, 0.35) 30%, transparent 32%),
-    conic-gradient(from -30deg, #eef5fa 0 60deg, #b4c7d6 60deg 120deg, #d6e3ec 120deg 180deg,
-      #a3b8c9 180deg 240deg, #cddbe6 240deg 300deg, #bccdda 300deg 360deg);
-}
+/* 표면 무늬(절단선·반짝이 점)는 orb.js가 3D로 돌려서 그림. 뒤쪽은 희미하게 비침 */
+.player .orb-lines { position: absolute; inset: 0; width: 100%; height: 100%; }
+.orb-line { fill: none; stroke: rgba(255, 255, 255, 0.85); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.orb-line.back { stroke: rgba(225, 245, 255, 0.28); stroke-width: 1.2; }
+.orb-dot { fill: #ffffff; }
+.orb-line.band { stroke: rgba(70, 225, 255, 0.95); stroke-width: 6.5; }          /* 굵은 띠: 굴러가는 방향이 잘 보임 */
+.orb-line.band.back { stroke: rgba(70, 225, 255, 0.3); stroke-width: 3.5; }
+.orb-mark { fill: #1d4f9e; stroke: rgba(255, 255, 255, 0.7); stroke-width: 0.8; } /* 표식 점 */
 .player::after {
   content: "";
   position: absolute;
   inset: 18%;
-  clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 42%, rgba(8, 24, 52, 0.55) 100%);
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.95) 0 7%, rgba(255, 255, 255, 0.35) 13%, rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 70% 76%, rgba(190, 245, 255, 0.55) 0%, rgba(190, 245, 255, 0) 30%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0) 52%, rgba(20, 70, 110, 0.35) 80%, rgba(8, 30, 60, 0.75) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
-/* 구르는 중간에 살짝 커졌다 돌아옴 → 모서리를 딛고 넘어가는 느낌 */
-.player.rolling .hex { animation: roll var(--move) var(--ease); }
 .player.invincible { animation: blink 0.15s infinite alternate; }
 /* 막힌 방향으로 밀었을 때 살짝 툭 부딪힘 (--bx, --by = 민 방향) */
-.player.bump { animation: bump 0.16s ease-out; }
+.board .player.bump { animation: bump 0.16s ease-out; }
+/* 벽에 닿음: 벽까지 가서 부딪힌 방향으로 납작해졌다가(--sqx, --sqy) 튕겨 나옴 */
+.board .player.wallhit { animation: wallhit 0.42s cubic-bezier(0.3, 0.7, 0.4, 1); }
+@keyframes wallhit {
+  0% { translate: 0 0; scale: 1 1; }
+  30% { translate: calc(var(--bx) * 30%) calc(var(--by) * 30%); scale: var(--sqx) var(--sqy); }
+  55% { translate: calc(var(--bx) * -8%) calc(var(--by) * -8%); scale: 1.04 1.04; }
+  78% { translate: calc(var(--bx) * 3%) calc(var(--by) * 3%); scale: 1 1; }
+  100% { translate: 0 0; scale: 1 1; }
+}
+/* 부딪힌 벽 조각: 번쩍이며 흔들림 */
+.wall.hit { animation: wall-hit 0.35s ease-out; }
+@keyframes wall-hit {
+  0% { filter: brightness(2.2); box-shadow: 0 0 0 1px #1a1f2c, 0 0 16px rgba(160, 200, 255, 0.95); }
+  30% { translate: 1px 1px; }
+  60% { translate: -1px 0; }
+  100% { filter: brightness(1); translate: 0 0; }
+}
 @keyframes bump { 50% { translate: calc(var(--bx) * 12%) calc(var(--by) * 12%); } }
 
-/* 금: 생명이 줄 때마다 늘어남 (data-crack = 잃은 생명 수). .hex 안에 있어서 같이 굴러감 */
+/* 금: 생명이 줄 때마다 늘어남 (data-crack = 잃은 생명 수). 볼 앞면에 고정 */
 .player .crack {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%);
+  clip-path: circle(50%);
 }
 /* 금 선: 틈의 그림자(core) + 살짝 비껴서 빛 반사(glint). 굵기는 crack.js가 마디마다 지정 */
 .player .crack .core path,
@@ -282,21 +350,20 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
 .player[data-crack="1"] .c1,
 .player[data-crack="2"] .c1,
 .player[data-crack="2"] .c2 { opacity: 1; }
-.player.crack-flash .hex::before,
+.player.crack-flash .orb-lines,
 .player.crack-flash .crack { animation: crack-flash 0.35s ease-out; }
 
 /* 깨짐: 몸체는 숨기고 조각이 흩어짐 */
 .player.shatter { animation: none; filter: drop-shadow(0 0 4px rgba(45, 226, 255, 0.8)); } /* 무적 깜빡임이 조각에 걸리지 않게 */
 .player.shatter::before,
 .player.shatter::after,
-.player.shatter .hex { opacity: 0; }
+.player.shatter .orb { opacity: 0; }
 .player .shard {
   position: absolute;
   inset: 18%;
   animation: shard var(--dur, 0.8s) cubic-bezier(0.15, 0.6, 0.35, 1) forwards;
 }
 
-@keyframes roll { 0% { scale: 1; } 50% { scale: 1.07; } 100% { scale: 1; } }
 @keyframes crack-flash { 0% { filter: brightness(2.2); } 100% { filter: brightness(1); } }
 /* 바깥으로 튀었다가 중력처럼 아래로 떨어지며 사라짐 */
 @keyframes shard {
@@ -317,6 +384,70 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
   text-shadow: 0 0 20px var(--cyan);
   pointer-events: none;
   z-index: 3;
+}
+
+/* 클리어 연출: 아래 줄부터 위 줄까지 한 번만 차오름. 지나간 칸은 계속 빛나며
+   옅은 파랑 → 조금 짙은 파랑으로 물들어 가고, 판 테두리 빛도 함께 커짐 (칸마다 --wd만큼 늦게 시작) */
+.board.wave { animation: board-glow 3s ease-in-out both; }
+.board.wave .cell::before { box-shadow: none; } /* 밑에 깔린 큐브 빛이 새어 나와 테두리가 물드는 것 방지 */
+.board.wave .cell:not(.hole)::after {
+  content: "";
+  position: absolute;
+  inset: 3px; /* 큐브 테두리(검은색 2px) 안쪽만 채움 → 게임 중과 같은 검은 테두리가 보임 */
+  border: 0;
+  border-radius: 1px;
+  background-color: #2563e0;
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  animation: wave-fill 1.9s ease-out var(--wd, 0s) 1 both;
+}
+@keyframes wave-fill {
+  0% { opacity: 0; background-color: #e3eeff; transform: scale(0.85); }
+  15% { opacity: 0.95; background-color: #b4d0ff; transform: scale(1.05); }   /* 차오르는 순간: 아주 옅은 하늘빛 */
+  55% { opacity: 0.92; background-color: #6fa3ff; transform: scale(1); }
+  100% { opacity: 0.9; background-color: #2563e0; transform: scale(1); }       /* 끝: 큐브보다 조금 짙은 파랑 */
+}
+@keyframes board-glow {
+  0% { box-shadow: 0 0 0 4px var(--frame, #24272f), 0 8px 24px rgba(0, 0, 0, 0.6); }
+  100% { box-shadow: 0 0 0 4px var(--frame, #24272f), 0 0 46px rgba(47, 123, 255, 0.55), 0 8px 24px rgba(0, 0, 0, 0.6); }
+}
+/* 생명을 다 잃었을 때: 같은 연출을 빨간색 계열로 (옅은 붉은빛 → 짙은 빨강) */
+.board.wave.wave-fail { animation-name: board-glow-fail; }
+.board.wave.wave-fail .cell:not(.hole)::after { background-color: #c8102e; animation-name: wave-fill-fail; }
+@keyframes wave-fill-fail {
+  0% { opacity: 0; background-color: #ffe3e8; transform: scale(0.85); }
+  15% { opacity: 0.95; background-color: #ffb4c1; transform: scale(1.05); }
+  55% { opacity: 0.92; background-color: #ff6f86; transform: scale(1); }
+  100% { opacity: 0.9; background-color: #c8102e; transform: scale(1); }
+}
+@keyframes board-glow-fail {
+  0% { box-shadow: 0 0 0 4px var(--frame, #24272f), 0 8px 24px rgba(0, 0, 0, 0.6); }
+  100% { box-shadow: 0 0 0 4px var(--frame, #24272f), 0 0 46px rgba(255, 45, 85, 0.55), 0 8px 24px rgba(0, 0, 0, 0.6); }
+}
+.clear-banner.fail {
+  color: #fff0f2;
+  text-shadow: 0 0 10px rgba(255, 120, 140, 0.95), 0 0 28px rgba(255, 45, 85, 0.85), 0 0 60px rgba(255, 45, 85, 0.6);
+}
+.clear-banner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 54px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: #eef4ff;
+  text-shadow: 0 0 10px rgba(120, 175, 255, 0.95), 0 0 28px rgba(47, 123, 255, 0.85), 0 0 60px rgba(47, 123, 255, 0.6);
+  pointer-events: none;
+  z-index: 4;
+  animation: banner 1s ease-out both;
+}
+@keyframes banner {
+  0% { opacity: 0; transform: scale(0.6); filter: blur(8px); }
+  35% { opacity: 1; transform: scale(1.08); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
 }
 
 .hint { text-align: center; color: var(--muted); font-size: 12px; letter-spacing: 0.2em; margin: 10px 0 0; }
@@ -445,10 +576,11 @@ button:disabled { opacity: 0.3; }
 @keyframes pop { from { transform: scale(1); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
 @keyframes warn { from { opacity: 0.4; } to { opacity: 1; } }
 @keyframes blink { from { opacity: 1; } to { opacity: 0.2; } }
+/* translate로 흔들어서 기울기(transform)와 같이 적용됨 */
 @keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-6px); }
-  75% { transform: translateX(6px); }
+  0%, 100% { translate: 0 0; }
+  25% { translate: -6px 0; }
+  75% { translate: 6px 0; }
 }
 
 /* 한글·한자·가나는 영어용 넓은 글자 간격을 줄임 */

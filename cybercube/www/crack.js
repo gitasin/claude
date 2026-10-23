@@ -5,7 +5,8 @@
 // 1단계(생명 2) = 충격 자국 + 금 3~4갈래가 중간까지, 2단계(생명 1) = 모든 금이 테두리까지 + 거미줄 금
 // 좌표는 육각형 상자 기준 % (0~100). SVG viewBox도 0~100이라 그대로 씀
 (() => {
-  const HEX = [[25, 6.7], [75, 6.7], [100, 50], [75, 93.3], [25, 93.3], [0, 50]];
+  // 볼 테두리 (원을 24각형으로 근사)
+  const HEX = Array.from({ length: 24 }, (_, k) => [50 + 50 * Math.cos((k / 24) * Math.PI * 2), 50 + 50 * Math.sin((k / 24) * Math.PI * 2)]);
   const STEPS = 6; // 금 한 갈래를 몇 마디로 꺾을지
   const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -14,7 +15,7 @@
     const d = [Math.cos(a), Math.sin(a)];
     let best = null;
     HEX.forEach((A, k) => {
-      const B = HEX[(k + 1) % 6];
+      const B = HEX[(k + 1) % HEX.length];
       const e = [B[0] - A[0], B[1] - A[1]];
       const den = d[0] * e[1] - d[1] * e[0];
       if (Math.abs(den) < 1e-9) return;
@@ -203,8 +204,8 @@
         shard.className = 'shard';
         shard.style.clipPath = `polygon(${poly.map((q) => `${f(q[0])}% ${f(q[1])}%`).join(', ')})`;
         shard.style.transformOrigin = `${f(c[0])}% ${f(c[1])}%`;
-        const light = Math.round(rand(200, 245));
-        shard.style.background = `linear-gradient(${Math.round(rand(0, 360))}deg, rgb(${light + 8}, ${light + 10}, 255), rgb(${light - 70}, ${light - 50}, ${light - 30}))`;
+        const light = Math.round(rand(190, 240));
+        shard.style.background = `linear-gradient(${Math.round(rand(0, 360))}deg, rgb(${light}, ${Math.min(255, light + 25)}, 255), rgb(${light - 80}, ${light - 30}, ${light - 5}))`;
         shard.style.setProperty('--dx', `${f(dir[0] * dist)}px`);
         shard.style.setProperty('--dy', `${f(dir[1] * dist - rand(0, size * 0.15))}px`);
         shard.style.setProperty('--fall', `${f(size * rand(0.3, 0.7))}px`);

@@ -109,6 +109,42 @@
       ],
     },
     {
+      // 판이 기울어 볼이 낮은 쪽으로 굴러가 벽에 부딪힘
+      title: 'd8t',
+      sub: 'd8s',
+      map: ['.....', '.....', '.....', '.....', '.....'],
+      player: [1, 2],
+      steps: [
+        [600, (d) => d.tilt(9, 0)],
+        [700, (d) => d.glide(1, 0)],
+        [300, (d) => d.glide(1, 0)],
+        [230, (d) => d.glide(1, 0)],
+        [250, (d) => d.wallHit(1, 0)],
+        [900, (d) => d.tilt(0, 9)],
+        [700, (d) => d.glide(0, 1)],
+        [280, (d) => d.glide(0, 1)],
+        [250, (d) => d.wallHit(0, 1)],
+        [800, (d) => d.tilt(0, 0)],
+      ],
+    },
+    {
+      // 벽이 뚫린 곳으로 가면 떨어져 생명 -1, 시작 지점에서 다시
+      title: 'd9t',
+      sub: 'd9s',
+      map: ['.....', '.....', '.....', '.....', '.....'],
+      player: [2, 2],
+      gaps: [['right', 2]],
+      hud: { lives: true },
+      steps: [
+        [700, (d) => d.move(1, 0)],
+        [550, (d) => d.move(1, 0)],
+        [550, (d) => d.fall(1, 0)],
+        [1300, (d) => d.move(-1, 0)],
+        [500, (d) => d.move(-1, 0)],
+        [500, (d) => d.wallHit(-1, 0)],
+      ],
+    },
+    {
       title: 'd7t',
       sub: 'd7s',
       map: ['.....', '..B..', '.....', '.....', '.....'],
@@ -129,7 +165,23 @@
   let current = 0;
   let onDone = null;
 
+  // 판 둘레 벽 (시연 판은 5×5)
+  const walls = { top: [], bottom: [], left: [], right: [] };
+  function buildWalls() {
+    Object.keys(walls).forEach((side) => {
+      for (let i = 0; i < N; i++) {
+        const w = document.createElement('div');
+        w.className = `wall ${side}`;
+        w.style.setProperty('--i', i);
+        boardEl.appendChild(w);
+        walls[side].push(w);
+      }
+    });
+  }
+
   function build() {
+    window.Orb.mount(playerEl);
+    buildWalls();
     boardEl.querySelectorAll('.cell').forEach((c) => c.remove());
     cells = [];
     for (let i = 0; i < N * N; i++) {
@@ -180,6 +232,44 @@
       render();
     },
     red(list) { d.red = list; render(); },
+    tilt(ax, ay) { window.tiltVisual?.(boardEl, ax, ay); },
+    glide(dx, dy) {
+      // 기울기로 이어서 굴러가는 한 칸
+      playerEl.classList.add('glide');
+      playerEl.style.setProperty('--move', '0.25s');
+      actions.move(dx, dy);
+    },
+    wallHit(dx, dy) {
+      playerEl.style.setProperty('--bx', dx);
+      playerEl.style.setProperty('--by', dy);
+      playerEl.style.setProperty('--sqx', dx ? 0.78 : 1.12);
+      playerEl.style.setProperty('--sqy', dy ? 0.78 : 1.12);
+      playerEl.classList.remove('wallhit');
+      void playerEl.offsetWidth;
+      playerEl.classList.add('wallhit');
+      const seg = dx ? walls[dx < 0 ? 'left' : 'right'][d.py] : walls[dy < 0 ? 'top' : 'bottom'][d.px];
+      if (seg) { seg.classList.remove('hit'); void seg.offsetWidth; seg.classList.add('hit'); }
+    },
+    fall(dx, dy) {
+      // 뚫린 곳 밖으로 굴러 나가 떨어짐 → 생명 -1 → 시작 지점에서 다시
+      playerEl.style.setProperty('--fdx', dx);
+      playerEl.style.setProperty('--fdy', dy);
+      playerEl.style.transform = `translate(${(d.px + dx * 0.85) * 100}%, ${(d.py + dy * 0.85) * 100}%)`;
+      window.Orb.roll(playerEl, dx, dy, 700);
+      playerEl.classList.add('falling');
+      later(750, () => {
+        playerEl.classList.remove('falling');
+        d.px = d.start[0];
+        d.py = d.start[1];
+        d.lives = Math.max(0, d.lives - 1);
+        playerEl.style.transition = 'none';
+        render();
+        void playerEl.offsetWidth;
+        playerEl.style.transition = '';
+        playerEl.classList.add('respawn');
+        later(400, () => playerEl.classList.remove('respawn'));
+      });
+    },
     sweep(row) {
       d.red = [];
       for (let x = 0; x < N; x++) if (d.tiles[row * N + x] !== 'G') d.red.push([x, row]);
@@ -223,7 +313,13 @@
     current = i;
     window.Crack.reset(playerEl); // 장면마다 깨끗한 육각형 + 새 금 모양
     const s = SCENES[i];
+    window.tiltVisual?.(boardEl, 0, 0);
+    playerEl.classList.remove('glide', 'wallhit', 'falling', 'respawn');
+    playerEl.style.removeProperty('--move');
+    const gaps = new Set((s.gaps || []).map(([side, i]) => `${side}${i}`));
+    Object.keys(walls).forEach((side) => walls[side].forEach((w, i) => w.classList.toggle('gap', gaps.has(`${side}${i}`))));
     d = {
+      start: s.player,
       tiles: s.map.join('').split(''),
       px: s.player[0],
       py: s.player[1],

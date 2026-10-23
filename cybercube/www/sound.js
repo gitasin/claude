@@ -1,5 +1,5 @@
 // 효과음 (WebAudio 합성, 파일 없음)
-// - window.Sound.create(isOn) → { step, blue, hit, crack, shatter, flatline, timeUp, tick, go, shuffle, clear, bump }
+// - window.Sound.create(isOn) → { step, blue, hit, crack, shatter, flatline, timeUp, tick, go, shuffle, wave, clear, bump }
 // - 부드럽게: 둥근 파형(sine)만, 마림바 같은 배음(bell), 살짝 천천히 시작, 높은 소리 거르기, 짧은 울림(echo)
 //   걷는 소리는 매번 높이가 조금씩 다름, 파랑을 빠르게 이어 밟으면 음계가 올라감
 (() => {
@@ -168,6 +168,29 @@
       noise({ dur: 0.3, vol: 0.06, type: 'bandpass', freq: 600, sweepTo: 3500, q: 2, echo: 0.3 });   // 부드러운 "슈욱"
       bell(1568, { vol: 0.045, dur: 0.5, delay: 0.14, echo: 0.5 });                                  // 딩
       bell(2093, { vol: 0.035, dur: 0.5, delay: 0.21, echo: 0.5 });                                  // 동
+    },
+    tilt() {
+      // 판이 기울어짐: 낮게 "끼이익"
+      tone({ f: 120, slide: 85, dur: 0.6, type: 'sine', vol: 0.09, attack: 0.08, echo: 0.2 });
+      noise({ dur: 0.5, vol: 0.05, type: 'bandpass', freq: 420, sweepTo: 260, q: 4, echo: 0.2 });
+    },
+    wall() {
+      // 벽에 닿음: 둔한 "쿵" + 금속 울림
+      tone({ f: 140, slide: 70, dur: 0.18, type: 'sine', vol: 0.18, attack: 0.003, echo: 0.1 });
+      noise({ dur: 0.07, vol: 0.12, type: 'lowpass', freq: 700, echo: 0 });
+      tone({ f: 820, dur: 0.25, type: 'sine', vol: 0.025, delay: 0.01, attack: 0.003, echo: 0.3 });
+    },
+    drop() {
+      // 판 밖으로 떨어짐: "휘이익~" 내려가는 소리 + 멀리서 "툭"
+      tone({ f: 900, slide: 160, dur: 0.6, type: 'sine', vol: 0.09, attack: 0.01, echo: 0.3 });
+      noise({ dur: 0.12, vol: 0.08, delay: 0.62, type: 'lowpass', freq: 300, echo: 0.3 });
+    },
+    wave() {
+      // 아래→위로 한 번 차오르는 데 맞춰 줄마다 한 음씩 올라감 (0.15초 간격) + 뒤에 은은한 울림
+      const notes = [392, 440, 523, 587, 659, 784, 880, 1047];
+      notes.forEach((f, k) => bell(f, { vol: 0.032, dur: 0.7, delay: k * 0.15, echo: 0.5 }));
+      [262, 392, 523].forEach((f) => tone({ f, dur: 2.2, type: 'sine', vol: 0.02, delay: 0.8, attack: 0.6, echo: 0.6 }));
+      noise({ dur: 2.6, vol: 0.025, type: 'bandpass', freq: 900, sweepTo: 4000, q: 0.7, echo: 0.4 }); // 물결 소리
     },
     clear() {
       [523, 659, 784, 1047, 1319].forEach((f, i) => bell(f, { vol: 0.07, dur: 0.6, delay: i * 0.08, echo: 0.4 }));
