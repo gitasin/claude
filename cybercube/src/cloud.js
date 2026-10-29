@@ -1,6 +1,6 @@
 // 클라우드: Firebase 익명 로그인 + Firestore
 // - 진행 상황 백업: players/{uid}
-// - 스테이지별 랭킹: stages/{스테이지 번호}/scores/{uid}  (기록 = 클리어 시간 + 피격당 5초, 낮을수록 좋음)
+// - 스테이지별 랭킹: levels/{스테이지 id}/points/{uid}  (점수 = 밟은 파랑 숫자의 합, 높을수록 좋음)
 // - 게임은 폰 저장(localStorage)만으로 동작하고, 이 모듈은 그걸 클라우드와 맞춰주기만 함
 // - 인터넷이 없거나 설정이 비어 있으면 조용히 아무것도 안 함 (랭킹 함수는 null 반환)
 // - 빌드: npm run build → www/cloud.js (Firebase SDK를 한 파일로 묶어서 오프라인에서도 로드됨)
@@ -21,7 +21,7 @@ let pending = null;   // 아직 못 보낸 진행 상황
 let timer = null;
 let ready = null;     // 로그인이 끝나면 풀리는 Promise
 
-// 두 진행 상황 합치기: 별은 큰 값, 기록은 작은 값, 닉네임은 더 최근에 저장된 쪽
+// 두 진행 상황 합치기: 점수·별은 큰 값, 시간 기록은 작은 값, 닉네임은 더 최근에 저장된 쪽
 function merge(a, b) {
   const pick = (x = {}, y = {}, better) => {
     const out = { ...x };
@@ -32,6 +32,13 @@ function merge(a, b) {
   return {
     stars: pick(a.stars, b.stars, Math.max),
     best: pick(a.best, b.best, Math.min),
+    points: pick(a.points, b.points, Math.max),
+    cleared: pick(a.cleared, b.cleared, Math.max),
+    earned: pick(a.earned, b.earned, Math.max),
+    tpBought: Math.max(a.tpBought || 0, b.tpBought || 0),
+    tpUsed: Math.max(a.tpUsed || 0, b.tpUsed || 0),
+    frBought: Math.max(a.frBought || 0, b.frBought || 0),
+    frUsed: Math.max(a.frUsed || 0, b.frUsed || 0),
     name: newer.name || a.name || b.name || '',
     sound: a.sound,
     updated: Math.max(a.updated || 0, b.updated || 0),
@@ -56,7 +63,7 @@ async function currentUser(auth) {
   return user || (await signInAnonymously(auth)).user;
 }
 
-const scoresOf = (stage) => collection(db, 'stages', String(stage), 'scores');
+const scoresOf = (stage) => collection(db, 'levels', String(stage), 'points');
 
 window.cloud = {
   // 시작할 때 한 번: 로그인 → 클라우드 기록과 합치기 → onMerged(합친 결과)
@@ -89,16 +96,16 @@ window.cloud = {
   get uid() { return uid; },
 
   // 기록 올리기 (내 기존 기록보다 좋을 때만 저장). 반환: 내 순위 (1부터) 또는 null
-  async submit(stage, { name, score, ms, hits }) {
+  async submit(stage, { name, score }) {
     try {
       await ready;
       const ref = doc(scoresOf(stage), uid);
       const old = await getDoc(ref);
-      const best = old.exists() ? old.data().score : Infinity;
-      if (score < best) {
-        await setDoc(ref, { name, score, ms, hits, at: serverTimestamp() });
+      const best = old.exists() ? old.data().score : -1;
+      if (score > best) {
+        await setDoc(ref, { name, score, at: serverTimestamp() });
       }
-      return await this.rank(stage, Math.min(score, best));
+      return await this.rank(stage, Math.max(score, best));
     } catch (e) {
       console.warn('[cloud] 기록 저장 안 됨:', e.message);
       return null;
@@ -109,18 +116,18 @@ window.cloud = {
   async rank(stage, score) {
     try {
       await ready;
-      const snap = await getCount(query(scoresOf(stage), where('score', '<', score)));
+      const snap = await getCount(query(scoresOf(stage), where('score', '>', score)));
       return snap.data().count + 1;
     } catch (e) {
       return null;
     }
   },
 
-  // 상위 기록 목록. 반환: [{ uid, name, score, ms, hits }] 또는 null
+  // 상위 기록 목록. 반환: [{ uid, name, score }] 또는 null
   async top(stage, n = 10) {
     try {
       await ready;
-      const snap = await getDocs(query(scoresOf(stage), orderBy('score'), limit(n)));
+      const snap = await getDocs(query(scoresOf(stage), orderBy('score', 'desc'), limit(n)));
       return snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
     } catch (e) {
       console.warn('[cloud] 랭킹 못 불러옴:', e.message);

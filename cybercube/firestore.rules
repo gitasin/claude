@@ -26,6 +26,28 @@ service cloud.firestore {
             || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
     }
 
+    // 레벨 랭킹: 누구나 읽기, 자기 점수만 쓰기 (점수 = 밟은 파랑 숫자의 합, 높을수록 좋음)
+    match /levels/{stage}/points/{uid} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && stage.matches('L[0-9]{1,2}-[0-9]{1,2}')
+        && validPoints(request.resource.data)
+        && request.resource.data.at == request.time;
+      // 더 높은 점수로 바꾸거나, 닉네임만 바꾸기
+      allow update: if request.auth != null && request.auth.uid == uid
+        && validPoints(request.resource.data)
+        && ((request.resource.data.score > resource.data.score
+              && request.resource.data.at == request.time)
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
+    }
+
+    function validPoints(d) {
+      return d.keys().hasOnly(['name', 'score', 'at'])
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 12
+        && d.score is int && d.score >= 0 && d.score <= 100000
+        && d.at is timestamp;
+    }
+
     function validScore(d) {
       return d.keys().hasOnly(['name', 'score', 'ms', 'hits', 'at'])
         && d.name is string && d.name.size() >= 1 && d.name.size() <= 12

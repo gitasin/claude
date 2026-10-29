@@ -87,7 +87,7 @@ h1 {
 }
 h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margin-left: 4px; }
 
-.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 14px; } /* 난이도 4개 */
+.tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 14px; } /* 레벨 10개 = 5개씩 2줄 */
 .tab {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 8px 2px; font-size: 12px; white-space: nowrap; overflow: hidden;
@@ -161,6 +161,7 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
   justify-content: center;
   position: relative;
   touch-action: none;
+  -webkit-touch-callout: none; /* 길게 눌러도 메뉴가 안 뜨게 (시간 정지) */
 }
 .board {
   position: relative;
@@ -198,10 +199,10 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
 }
 .wall.top, .wall.bottom { height: 7px; width: calc(100% / var(--cols) - 2px); left: calc(var(--i) * 100% / var(--cols) + 1px); }
 .wall.left, .wall.right { width: 7px; height: calc(100% / var(--rows) - 2px); top: calc(var(--i) * 100% / var(--rows) + 1px); }
-.wall.top { top: -12px; }
-.wall.bottom { bottom: -12px; }
-.wall.left { left: -12px; }
-.wall.right { right: -12px; }
+.wall.top { top: -10px; }
+.wall.bottom { bottom: -10px; }
+.wall.left { left: -10px; }
+.wall.right { right: -10px; }
 .wall.gap { background: none; box-shadow: 0 0 6px rgba(255, 45, 85, 0.45); border: 2px dashed rgba(255, 70, 105, 0.95); }
 
 /* 판 밖으로 떨어짐: 가장자리 밖으로 굴러 나간 뒤(0.15초) 중력처럼 점점 빨라지며 허공으로 떨어짐
@@ -503,9 +504,9 @@ h1 span { color: var(--red); text-shadow: 0 0 12px rgba(255, 45, 85, 0.7); margi
 /* 메인 화면은 내용이 넘치면 스크롤 (폰 툴바에 가려도 내려서 볼 수 있게) */
 #stageScreen { overflow-y: auto; }
 .mode-row { display: flex; justify-content: space-between; gap: 8px; margin: -10px 0 10px; flex-shrink: 0; }
-.mode-row .lang { font-size: 12px; padding: 8px 12px; }
-.mode-row .mode { font-size: 12px; padding: 8px 12px; letter-spacing: 0.06em; color: var(--cyan); border-color: var(--cyan); }
-.mode-row .mode.release { color: #ffd84a; border-color: #ffd84a; }
+header .lang { font-size: 12px; padding: 8px 12px; flex-shrink: 0; }
+.footer .mode { font-size: 12px; padding: 8px 12px; letter-spacing: 0.06em; color: var(--cyan); border-color: var(--cyan); }
+.footer .mode.release { color: #ffd84a; border-color: #ffd84a; }
 .ad-overlay {
   position: fixed; inset: 0; z-index: 20;
   display: flex; align-items: center; justify-content: center;
@@ -635,3 +636,247 @@ html:not([lang="en"]) .panel h2 { letter-spacing: 0.03em; }
 .cell.warn::before { background: #3a0c18; border-color: var(--frame); box-shadow: inset 0 0 10px rgba(255, 45, 85, 0.55); }
 .cell.pop::after { inset: 1px; border-radius: 2px; }
 .legend .tile { border-radius: 3px; border: 2px solid var(--frame); }
+
+/* ── 점수: 노란 동전 + 숫자 ── */
+.coin-num { display: inline-flex; align-items: center; gap: 0.25em; color: #ffd84a; font-variant-numeric: tabular-nums; }
+.coin-num::before {
+  content: '$';
+  flex: none;
+  width: 1.05em; height: 1.05em;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.8em; font-weight: 900; line-height: 1;
+  color: #8a5a00;
+  background: radial-gradient(circle at 35% 30%, #fff6b0 0%, #ffd84a 40%, #f0a800 100%);
+  box-shadow: inset 0 0 0 0.09em #c98a00, 0 0 6px rgba(255, 200, 40, 0.55);
+}
+#modalStars.coin-num { font-size: 34px; font-weight: 900; letter-spacing: 0; justify-content: center; display: flex; }
+.stage-btn small.coin-num { font-size: 12px; letter-spacing: 0; }
+.tabs small.coin-num { justify-content: center; }
+/* 파랑 큐브 숫자 */
+.cell .num {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: clamp(12px, 4.2vw, 22px);
+  color: #fff; text-shadow: 0 1px 3px rgba(0, 20, 80, 0.9);
+  pointer-events: none; z-index: 1;
+}
+/* 밟으면 떠오르는 +숫자 */
+.float-points {
+  position: absolute; z-index: 5; pointer-events: none;
+  transform: translate(-50%, -50%);
+  font-size: clamp(14px, 4.6vw, 22px); font-weight: 900;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  animation: float-up 0.9s ease-out forwards;
+}
+@keyframes float-up {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(0.8); }
+  to { opacity: 0; transform: translate(-50%, -190%) scale(1.15); }
+}
+
+/* 난이도 표시 (스테이지 버튼 위, 게임 화면 스테이지 이름 앞) */
+.stage-btn .diff { font-style: normal; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.05em; }
+.stage-name .diff {
+  display: inline-block; margin-right: 8px; padding: 2px 7px;
+  border-radius: 6px; border: 1px solid currentColor;
+  font-size: 0.75em; letter-spacing: 0.05em; color: #ffd84a; vertical-align: 1px;
+}
+
+
+/* ── 아이템 가게 (스테이지 화면) ── */
+.shop { margin-top: 14px; }
+.shop-title { font-size: 11px; color: var(--muted); letter-spacing: 0.15em; margin-bottom: 6px; }
+.shop-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+.shop-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.shop-info b { font-size: 15px; }
+.shop-info b small { font-size: 11px; color: var(--cyan); margin-left: 4px; font-weight: 700; }
+.shop-info span { font-size: 11px; color: var(--muted); }
+.shop-item button { flex: none; white-space: nowrap; }
+.shop-item button:disabled { opacity: 0.4; }
+
+/* ── 순간이동 ── */
+.item-bar { text-align: center; color: #ffd84a; font-size: 12px; letter-spacing: 0.05em; margin: 8px 0 0; min-height: 1.3em; }
+.item-bar.aim { color: var(--cyan); animation: blink 0.35s infinite alternate; }
+/* 준비: 볼이 깜빡임 */
+.board .player.tp-aim { animation: tp-aim 0.3s steps(2, jump-none) infinite; }
+@keyframes tp-aim { 0% { opacity: 1; filter: brightness(1.8); } 100% { opacity: 0.3; filter: brightness(1); } }
+/* 사라짐·나타남: 깜빡임(투명도)은 .player, 작아짐·커짐은 안쪽(.orb, 빛)만
+   (.player에 scale을 주면 칸 위치(transform)까지 같이 줄어서 볼이 판 왼쪽 위로 끌려가 보임) */
+.board .player.tp-out { animation: tp-out-blink 0.32s linear forwards; }
+.board .player.tp-out .orb, .board .player.tp-out::after { animation: tp-out-size 0.32s linear forwards; }
+@keyframes tp-out-blink { 0% { opacity: 1; } 20% { opacity: 0.15; } 40% { opacity: 1; } 60% { opacity: 0.1; } 80% { opacity: 0.8; } 100% { opacity: 0; } }
+@keyframes tp-out-size { 0% { scale: 1; filter: brightness(1); } 40% { filter: brightness(2.2); } 80% { scale: 0.75; filter: brightness(2.5); } 100% { scale: 0.3; } }
+.board .player.tp-in { animation: tp-in-blink 0.38s linear; }
+.board .player.tp-in .orb, .board .player.tp-in::after { animation: tp-in-size 0.38s linear; }
+@keyframes tp-in-blink { 0% { opacity: 0; } 25% { opacity: 0.9; } 45% { opacity: 0.15; } 65% { opacity: 1; } 82% { opacity: 0.35; } 100% { opacity: 1; } }
+@keyframes tp-in-size { 0% { scale: 0.3; filter: brightness(2.5); } 25% { scale: 1.12; } 65% { filter: brightness(1.8); } 100% { scale: 1; filter: brightness(1); } }
+
+/* ── 게임 화면 아이템 버튼 (가진 개수 · 누르면 하나 삼) ── */
+.game-items { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
+.item-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; min-height: 34px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px; color: inherit; font: inherit; font-size: 13px;
+}
+.item-chip b { min-width: 1ch; }
+.item-chip .item-buy { font-size: 11px; color: #ffd84a; border-left: 1px solid var(--line); padding-left: 6px; }
+.item-chip[data-poor] .item-buy { opacity: 0.4; }
+.item-chip:active { transform: scale(0.96); }
+
+/* ── 시간 정지 ── */
+/* 볼을 누르고 있으면 둘레에 원이 차오름 (--hold 0~1) */
+.player .hold-ring { display: none; }
+.player.holding .hold-ring {
+  display: block; position: absolute; inset: 2%; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(#9fe8ff calc(var(--hold, 0) * 360deg), rgba(159, 232, 255, 0.15) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+}
+/* 멈춘 동안: 판이 얼음빛, 빨강도 푸르스름하게 */
+.board.frozen .cell::before { filter: saturate(0.45) hue-rotate(-25deg) brightness(1.1); }
+.board.frozen { transition: transform 0.75s cubic-bezier(0.34, 1.35, 0.6, 1), box-shadow 0.1s; box-shadow: 0 0 0 2px rgba(159, 232, 255, 0.5), 0 0 24px rgba(159, 232, 255, 0.35); }
+.item-bar.frozen { color: #9fe8ff; }
+
+/* ── 좁은 폰: 가로 스크롤 없게 ── */
+.screen { overflow-x: hidden; }
+header { gap: 8px; margin: 4px 0 12px; }
+h1 { font-size: clamp(18px, 5.6vw, 26px); white-space: nowrap; min-width: 0; }
+.top-row { gap: 6px; margin-bottom: 12px; flex-shrink: 0; }
+.top-row .box { margin-left: auto; }
+.header-right button.icon { width: 40px; height: 40px; }
+.header-right .box { min-width: 0; padding: 6px 10px; }
+.hud .box { min-width: 0; padding: 6px 4px; }
+.topbar-right { display: flex; gap: 6px; }
+.stage-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stage-btn .lvl { font-size: 17px; white-space: nowrap; }
+/* 스테이지 8개가 스크롤 없이 다 보이게: 버튼을 납작하게, 목록은 줄어들지 않음 (넘치면 화면 전체가 스크롤) */
+.stage-btn { aspect-ratio: 1.3; }
+.stage-grid { flex-shrink: 0; overflow: visible; }
+
+/* ── 아이템 목록 (가게 · 🎒 아이템 창) ── */
+.shop-list { display: flex; flex-direction: column; gap: 8px; }
+.shop-item { flex-wrap: wrap; row-gap: 8px; }
+.shop-info { flex: 1 1 150px; } /* 좁으면 ? · 구매 버튼이 아래 줄 오른쪽으로 */
+.item-actions { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.shop-item .item-help { flex: none; width: 34px; height: 34px; border-radius: 50%; font-size: 16px; }
+#modalBody.item-list { display: flex; flex-direction: column; gap: 8px; text-align: left; margin-bottom: 16px; }
+#modalBody.item-list .shop-item { gap: 8px; padding: 10px; }
+
+/* ── 시연: 손가락 (탭 한 번 = 퍼지는 원, 누르고 있기 = 계속 보이는 원) ── */
+.demo-tap {
+  position: absolute; left: 0; top: 0;
+  width: calc(100% / var(--cols)); height: calc(100% / var(--rows));
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 4;
+}
+.demo-tap i { width: 46%; height: 46%; border-radius: 50%; background: rgba(255, 255, 255, 0.55); border: 2px solid #fff; opacity: 0; }
+.demo-tap.tap i { animation: demo-tap 0.35s ease-out; }
+.demo-tap.press i { opacity: 0.85; transform: scale(0.85); }
+@keyframes demo-tap { 0% { opacity: 0.9; transform: scale(0.6); } 100% { opacity: 0; transform: scale(1.5); } }
+.demo-badge.freeze { color: #9fe8ff; text-shadow: 0 0 18px #9fe8ff; }
+/* 🎒 아이템 창: 이름 · ? · 구매가 한 줄, 창 높이 작게 */
+#modalBody.item-list { margin-bottom: 12px; }
+#modalBody.item-list .shop-item { flex-wrap: nowrap; padding: 8px 10px; }
+#modalBody.item-list .shop-info { flex: 1 1 auto; min-width: 0; }
+#modalBody.item-list .shop-info b { white-space: nowrap; font-size: 14px; }
+#modalBody.item-list .shop-info b small { display: block; margin: 2px 0 0; }
+#modalBody.item-list .item-actions { gap: 6px; }
+#modalBody.item-list [data-buy] { padding: 8px 10px; }
+.panel:has(.item-list) { padding: 16px; }
+.panel:has(.item-list) h2 { margin-bottom: 2px; }
+.panel:has(.item-list) #modalText { display: none; }
+/* 아이템 사용법 시연: 사용 방법 문구를 크게 강조 */
+.item-demo .demo-caption span {
+  margin-top: 12px; padding: 10px 14px; border-radius: 12px;
+  font-size: 18px; font-weight: 800; line-height: 1.4; color: #ffd84a;
+  background: rgba(255, 216, 74, 0.08); border: 1px solid rgba(255, 216, 74, 0.45);
+  text-shadow: 0 0 10px rgba(255, 216, 74, 0.45);
+}
+/* 시연 화면은 보이는 화면에 딱 맞춤 (주소창·툴바가 있어도 닫기 버튼이 밀려나지 않게)
+   판은 남는 공간에 맞춰 줄어듦, 설명 칸은 높이 고정 (한 줄 ↔ 두 줄로 바뀌어도 판이 위아래로 안 움직임) */
+#demoScreen { position: fixed; inset: 0; margin: 0 auto; height: auto; overflow: hidden; }
+#demoScreen > * { flex-shrink: 0; }
+#demoScreen .demo-wrap { flex: 1 1 0; min-height: 0; container-type: size; }
+.demo-board { width: min(78vw, 300px, 42dvh, 96cqh); height: min(78vw, 300px, 42dvh, 96cqh); }
+.item-demo .topbar { justify-content: center; }
+.item-demo .demo-caption { min-height: 0; margin: 10px 0 8px; }
+.item-demo .demo-caption span {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  height: calc(1.4em * 2 + 22px); margin: 10px auto 0; max-width: 340px;
+}
+
+/* ── 아이템 샀을 때 ── */
+.shop-item, .item-chip, #modalStars, #totalStars, #score { position: relative; }
+.shop-item.bought, .item-chip.bought { animation: bought 0.6s ease-out; }
+@keyframes bought {
+  0% { border-color: #ffd84a; box-shadow: 0 0 0 2px rgba(255, 216, 74, 0.8), 0 0 22px rgba(255, 216, 74, 0.6); background: rgba(255, 216, 74, 0.16); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 216, 74, 0); }
+}
+.count-pop { display: inline-block; animation: count-pop 0.45s ease-out; }
+#modalBody.item-list small.count-pop { display: block; transform-origin: left center; }
+.shop-info small.count-pop { transform-origin: left center; }
+@keyframes count-pop { 0% { transform: scale(1); } 35% { transform: scale(1.35); color: #ffd84a; } 100% { transform: scale(1); } }
+.spent { animation: spent 0.5s ease-out; }
+b.spent { display: inline-block; }
+@keyframes spent { 0% { transform: scale(1); } 30% { transform: scale(0.88); filter: brightness(1.6); } 100% { transform: scale(1); } }
+.buy-float {
+  position: absolute; left: 50%; top: 0; z-index: 5; pointer-events: none; white-space: nowrap;
+  font-size: 16px; font-weight: 900; animation: buy-float 0.9s ease-out forwards;
+}
+.buy-float.gain { color: #ffd84a; text-shadow: 0 0 10px rgba(255, 216, 74, 0.8); }
+.buy-float.cost { color: var(--red); text-shadow: 0 0 8px rgba(255, 45, 85, 0.7); font-size: 14px; left: 100%; }
+@keyframes buy-float {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.7); }
+  20% { opacity: 1; transform: translate(-50%, -60%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -160%) scale(1); }
+}
+
+/* ── 게임 화면 아래: 아이템 버튼만 (안내 문구는 버튼 위에 떠서 판 크기를 줄이지 않음) ── */
+.item-dock { position: relative; flex-shrink: 0; }
+.item-dock .game-items { margin-top: 6px; }
+.item-dock .item-bar {
+  position: absolute; left: 50%; bottom: calc(100% + 2px); transform: translateX(-50%); z-index: 4;
+  margin: 0; min-height: 0; max-width: 100%; padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+  background: rgba(7, 7, 15, 0.85); pointer-events: none;
+}
+.item-dock .item-bar:empty { display: none; }
+/* 게임 화면은 좌우 여백을 줄여 판을 크게 (판 크기는 화면 폭에 맞춰짐) */
+#gameScreen { padding-left: max(6px, env(safe-area-inset-left)); padding-right: max(6px, env(safe-area-inset-right)); }
+.test-btns { display: flex; gap: 8px; }
+.footer .mode.reset { color: #ff8fa6; border-color: #ff8fa6; }
+
+/* ── 특별한 파랑: 큰 숫자(금테 + 금색 숫자, 반짝임) · 곱하기(보라 테 + ×숫자) ── */
+.cell.blue.big::before {
+  box-shadow: inset 0 0 0 2px #ffd84a, inset 0 0 12px rgba(255, 216, 74, 0.55), 0 0 16px rgba(255, 216, 74, 0.7);
+  animation: big-shine 1.2s ease-in-out infinite alternate;
+}
+@keyframes big-shine { from { filter: brightness(1); } to { filter: brightness(1.25); } }
+.cell.blue.big .num { color: #ffe680; font-size: clamp(11px, 3.8vw, 19px); text-shadow: 0 0 6px rgba(255, 200, 40, 0.9), 0 1px 3px rgba(60, 30, 0, 0.9); }
+.cell.blue.mul::before {
+  background: radial-gradient(circle, #8a6bff 0%, #5a4dff 55%, #3d5cf5 100%);
+  box-shadow: inset 0 0 0 2px #e08cff, inset 0 0 12px rgba(224, 140, 255, 0.6), 0 0 16px rgba(190, 110, 255, 0.75);
+}
+.cell.blue.mul .num { color: #fff; font-size: clamp(12px, 4vw, 20px); text-shadow: 0 0 8px rgba(240, 160, 255, 1), 0 1px 3px rgba(40, 0, 60, 0.9); }
+.cell.blue.moving.big::before, .cell.blue.moving.mul::before { animation: warn 0.12s infinite alternate; }
+
+/* 먹을 때 떠오르는 점수: 큰 숫자는 금색으로 크게, 곱하기는 계산식(작게) + 결과 */
+.float-points.big, .float-points.mul { z-index: 20; animation: float-up-big 1.3s ease-out forwards; font-size: clamp(18px, 6vw, 28px); white-space: nowrap; }
+.float-points.big { color: #ffd84a; text-shadow: 0 0 10px rgba(255, 216, 74, 0.9), 0 1px 4px rgba(0, 0, 0, 0.8); }
+.float-points.mul { color: #f3b6ff; text-shadow: 0 0 10px rgba(224, 140, 255, 0.95), 0 1px 4px rgba(0, 0, 0, 0.8); }
+.float-points small { position: absolute; bottom: 92%; left: 50%; transform: translateX(-50%); font-size: 0.6em; color: #fff; text-shadow: 0 0 6px rgba(224, 140, 255, 0.9), 0 1px 3px #000; }
+/* 큰 숫자·곱하기는 잠깐 커졌다가 선명하게 머문 뒤 사라짐 (계산식을 읽을 수 있게) */
+@keyframes float-up-big {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  15% { opacity: 1; transform: translate(-50%, -80%) scale(1.25); }
+  65% { opacity: 1; transform: translate(-50%, -120%) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(1.1); }
+}
+/* 위쪽 점수 칸: 자리 수가 많으면 글자를 줄여 옆 칸을 침범하거나 잘리지 않게 */
+.hud .box { overflow: hidden; }
+#score[data-len="l"] { font-size: 15px; }
+#score[data-len="xl"] { font-size: 12px; }
+.build-tag { width: 100%; text-align: center; font-size: 10px; color: var(--muted); opacity: 0.7; }
+/* 시연 설명은 단어 중간에서 줄이 안 바뀌게 (한글 "칸으 / 로" 방지) */
+.demo-caption span { word-break: keep-all; }

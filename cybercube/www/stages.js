@@ -12,6 +12,8 @@
 //     { type: 'chase', x, y, speed }           플레이어를 쫓아옴 (초록 위에 있으면 배회) — 패턴이 없어서 지금은 안 씀
 //     { type: 'sweep', axis: 'row'|'col', pos, dir, speed }  한 줄 전체가 쓸고 지나감 (초록은 안전)
 //   speed = 초당 이동 칸 수
+// ※ 아래 EASY~EXPERT(예전 초급~특급 48스테이지)는 지금 게임에 안 쓰고, 레벨을 만들 때 참고용으로 남겨 둠
+//   지금 게임의 스테이지는 맨 아래 '레벨 구성'
 // ── 초급 (EASY): 파랑 이동 4초마다 ──
 const EASY = [
   {
@@ -987,16 +989,104 @@ const EXPERT = [
   },
 ];
 
-// 난이도 구간 (스테이지 번호는 0부터 이어짐: 초급 0~11, 중급 12~23, 고급 24~35, 특급 36~47)
-// walls: 판 둘레 벽이 남아 있는 비율 [1스테이지, 12스테이지] (그 사이는 스테이지 번호에 따라 점점 듬성듬성)
+// ── 레벨 구성: 레벨 1~10 (지금은 레벨 1~3, 레벨마다 8스테이지) ──
+// id: 별·기록·랭킹을 저장하는 이름 ('L레벨-스테이지')
+// 판·시간·파랑 이동은 모두 예전 초급 1스테이지 그대로, 빨강만 스테이지마다 늘어남 (속도는 그대로)
+// 모든 레벨의 기본 판: 제한 시간 1분 15초, 파랑 16개 (판에는 8개씩 보임, game.js VISIBLE_BLUES)
+//   withGreen(4-2~)이 쓰는 칸: (4,1) 파랑 → 초록, (5,0) 빈칸 → 파랑, (1,6)·(2,5)는 비워 둠
+const BASE = {
+  ...EASY[0],
+  time: 75,
+  map: [
+    'B.B.B.',
+    '.B..B.',
+    'B....B',
+    '..BB..',
+    '.B..B.',
+    'B..B.B',
+    '...B..',
+    'G.P..B',
+  ],
+};
+const stage = (extra) => ({ time: BASE.time, shuffle: BASE.shuffle, map: BASE.map, hazards: [...BASE.hazards, ...extra] });
+const level = (lv, stages) => stages.map((s, k) => ({ id: `L${lv}-${k + 1}`, ...s }));
+
+// 레벨 1: 튕김 빨강만. 1스테이지 3개 → 스테이지마다 1개씩 늘어 8스테이지 10개
+const L1_MORE = [
+  { type: 'bounce', x: 5, y: 2, dx: -1, dy: 0, speed: 2 },
+  { type: 'bounce', x: 3, y: 1, dx: 0, dy: 1, speed: 2 },
+  { type: 'bounce', x: 5, y: 6, dx: -1, dy: 0, speed: 2 },
+  { type: 'bounce', x: 0, y: 2, dx: 0, dy: 1, speed: 2 },
+  { type: 'bounce', x: 4, y: 7, dx: 0, dy: -1, speed: 2 },
+  { type: 'bounce', x: 2, y: 5, dx: 1, dy: 0, speed: 2 },
+  { type: 'bounce', x: 1, y: 3, dx: 1, dy: 0, speed: 2 },
+];
+const LEVEL1 = level(1, [0, 1, 2, 3, 4, 5, 6, 7].map((k) => stage(L1_MORE.slice(0, k))));
+
+// 레벨마다 새 패턴을 하나씩만: 1레벨 직선 튕김 → 2레벨 대각선 튕김 → 3레벨 깜빡임 → 4레벨 쓸기
+
+// 레벨 2: 직선 튕김 3개(기본) + 대각선 튕김. 2-1은 대각선 3개 → 스테이지마다 1개씩 늘어 2-8은 10개
+//   판은 1레벨과 같음 (초록 1개). 속도는 직선과 같은 초당 2칸, 출발 자리·방향은 판마다 랜덤 (대각선 4방향 중 하나)
+const diagonals = (k) => Array.from({ length: k }, () => ({ type: 'bounce', x: 0, y: 0, dx: 1, dy: 1, speed: 2 }));
+const LEVEL2 = level(2, [3, 4, 5, 6, 7, 8, 9, 10].map((k) => stage(diagonals(k))));
+
+// 레벨 3: 직선 튕김 3개 + 깜빡이는 빨강 칸 (a·b 두 묶음이 번갈아 켜짐, 켜지기 전에 경고)
+//   주기는 모두 2초 (경고 0.5초). 3-1은 10칸씩(10+10) → 3-8은 15+15
+//   (파랑이 16개라 빈 바닥은 31칸: 3-1은 바닥의 약 2/3, 3-8은 거의 전부 → 예전 12+12~19+19와 같은 비율)
+//   자리는 판마다, 그리고 한 묶음이 꺼질 때마다 랜덤으로 바뀜 (move, game.js moveBlink)
+//   그래서 맵에는 개수만 맞춰 바닥 칸 앞에서부터 a n칸, b n칸을 채워 둠
+const blinkStage = (n, period, warn) => {
+  let k = 0;
+  const map = BASE.map.map((row) => row.replace(/\./g, () => (k++ < n ? 'a' : k <= 2 * n ? 'b' : '.')));
+  return { ...stage([]), map, blink: { period, warn, move: true } };
+};
+const LEVEL3 = level(3, [10, 11, 11, 12, 13, 14, 14, 15].map((n) => blinkStage(n, 2, 0.5)));
+
+// 레벨 4: 직선 튕김 3개 + 쓸기 빨강
+//   4-1: 붙은 쓸기 2줄 (pair: 두꺼운 한 줄처럼 같이 움직임, 가로·세로 중 판마다 랜덤)
+//   4-2~4-8 (가로+세로): 2+0 → 1+1 → 3+0 → 0+2 → 2+1 → 0+3 → 2+2
+//   세로 1줄이 가로 1.5줄쯤 어려워서 (시뮬레이션) 이 순서로 두면 스테이지마다 고르게 어려워짐
+//   axis: 'row' = 가로줄 쓸기, 'col' = 세로줄 쓸기, 'any' = 시작할 때 둘 중 하나 ('other' = 'any'의 반대 방향, 지금은 안 씀)
+//   at = 시작 줄 위치 (0 = 첫 줄 ~ 1 = 끝 줄), speed는 방향별 (예전 초급 쓸기 속도 그대로)
+const sweeps = (k, axis = 'any', shift = 0) => Array.from({ length: k }, (_, i) => ({ type: 'sweep', axis, at: (i + shift) / k, dir: 1, speed: { row: 1.4, col: 1.2 } }));
+// 4-1부터 초록 2개: 모서리에서 대각선으로 한 칸 안쪽 (왼쪽 아래 (1,6), 오른쪽 위 (4,1))
+//   원래 모서리 초록 (0,7)은 바닥으로, (4,1)에 있던 파랑은 비게 된 (5,0)으로 옮김
+const put = (map, x, y, ch) => map.map((row, r) => (r === y ? row.slice(0, x) + ch + row.slice(x + 1) : row));
+const withGreen = (st) => {
+  let map = put(st.map, 0, 7, '.');
+  map = put(map, 1, 6, 'G');
+  map = put(map, 4, 1, 'G');
+  map = put(map, 5, 0, 'B');
+  return { ...st, map };
+};
+// 가로 쓸기(row) h개 + 세로 쓸기(col) v개. 세로가 더 어려움. 시작 줄·방향은 판마다 랜덤 (game.js randomSweeps)
+const hv = (h, v) => [...sweeps(h, 'row'), ...sweeps(v, 'col')];
+const LEVEL4 = level(4, [
+  withGreen(stage(sweeps(2).map((h) => ({ ...h, pair: true })))),
+  ...[[2, 0], [1, 1], [3, 0], [0, 2], [2, 1], [0, 3], [2, 2]].map(([h, v]) => withGreen(stage(hv(h, v)))),
+]);
+// 4-7(세로3)은 아래 초록을 (1,6) → 오른쪽 위 대각선 (2,5)로: 안쪽이라 숨기 쉬워서 4-6과의 차이를 줄이고 4-8과는 벌림
+LEVEL4[6].map = put(put(LEVEL4[6].map, 1, 6, '.'), 2, 5, 'G');
+
+// nums: 파랑 큐브에 나오는 숫자 범위 [최소, 최대]. 첫 스테이지는 낮은 숫자 위주, 스테이지가 올라갈수록 높은 숫자가 자주 나옴 (game.js NUM_RATIO)
+// walls: 판 둘레 벽이 남아 있는 비율 [첫 스테이지, 마지막 스테이지] (그 사이는 스테이지 번호에 따라 점점 듬성듬성)
 //   벽이 있으면 막히고, 뚫린 곳으로 가면 판 밖으로 떨어져 생명 1개를 잃음
 // tilt: 판이 기울어짐 (볼이 낮은 쪽으로 저절로 굴러감)
 //   dirs = 기우는 방향 종류 ('h' 좌우, 'v' 위아래, 'd' 대각선) 중 랜덤
 //   angle = 기울기 [최소, 최대]° (12스테이지는 +stepUp°까지 점점 더), tilted = 기울어 있는 시간, flat = 평평한 시간 (초, 랜덤)
-const TIERS = [
+// (예전 난이도 설정: 레벨을 만들 때 참고)
+const OLD_TIERS = [
   { name: 'EASY', stages: EASY, walls: [1, 0.6], tilt: null }, // 초급은 판이 안 기울어짐
   { name: 'NORMAL', stages: NORMAL, walls: [0.8, 0.5], tilt: { dirs: ['h', 'v'], angle: [5, 10], stepUp: 2, tilted: [2, 4], flat: [3, 7] } },
   { name: 'HARD', stages: HARD, walls: [0.65, 0.35], tilt: { dirs: ['h', 'v', 'd'], angle: [7, 13], stepUp: 2, tilted: [2.5, 5], flat: [2.5, 6] } },
   { name: 'EXPERT', stages: EXPERT, walls: [0.5, 0.2], tilt: { dirs: ['h', 'v', 'd'], angle: [9, 16], stepUp: 2, tilted: [3, 6], flat: [2, 5] } },
+];
+// nums: 보통 파랑 숫자 범위, big: 가끔 나오는 큰 숫자 (스테이지가 올라갈수록 큰 쪽이 잘 나옴)
+const TIERS = [
+  // randomGreen: 초록 칸 자리를 판마다 랜덤으로 (시작 위치도 초록이라 같이 바뀜)
+  { level: 1, stages: LEVEL1, nums: [1, 10], big: [30, 50, 80, 100], walls: [1, 1], tilt: null, randomGreen: true }, // 벽 모두 막힘, 기울기 없음
+  { level: 2, stages: LEVEL2, nums: [11, 20], big: [50, 100, 150, 200], walls: [1, 1], tilt: null, randomGreen: true },
+  { level: 3, stages: LEVEL3, nums: [21, 30], big: [100, 200, 300, 500], walls: [1, 1], tilt: null },
+  { level: 4, stages: LEVEL4, nums: [31, 40], big: [300, 500, 800, 1000], walls: [1, 1], tilt: null },
 ];
 const STAGES = TIERS.flatMap((t) => t.stages);

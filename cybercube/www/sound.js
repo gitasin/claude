@@ -1,6 +1,7 @@
 // 효과음 (WebAudio 합성, 파일 없음)
 // - window.Sound.create(isOn) → { step, blue, hit, crack, shatter, flatline, timeUp, tick, go, shuffle, wave, clear, bump }
-// - 부드럽게: 둥근 파형(sine)만, 마림바 같은 배음(bell), 살짝 천천히 시작, 높은 소리 거르기, 짧은 울림(echo)
+// - 부드럽게: 둥근 파형(sine) 위주, 마림바 같은 배음(bell), 살짝 천천히 시작, 높은 소리 거르기, 짧은 울림(echo)
+//   빨강에 맞을 때만 일부러 각진 파형(square)으로 강한 경보음
 //   걷는 소리는 매번 높이가 조금씩 다름, 파랑을 빠르게 이어 밟으면 음계가 올라감
 (() => {
   let ctx = null;
@@ -126,15 +127,22 @@
       const now = performance.now();
       combo = now - lastBlue < 1600 ? Math.min(combo + 1, SCALE.length - 1) : 0;
       lastBlue = now;
-      const f = SCALE[combo];
-      // 마림바 "또롱": 또렷한 첫 음 → 5도 위 음
-      bell(f, { vol: 0.12, dur: 0.5, echo: 0.25 });
-      bell(f * 1.5, { vol: 0.07, dur: 0.45, delay: 0.06, echo: 0.3 });
+      // 은은한 "또로롱": 한 옥타브 낮게, 살짝 천천히 피어나고 길게 울림
+      // 두 음을 조금 어긋나게 겹치고(합창처럼) 매번 높이가 아주 조금 달라서 기계음처럼 안 들림
+      const f = SCALE[combo] / 2 * Math.pow(2, rand(-6, 6) / 1200);
+      tone({ f: f * 0.985, slide: f, dur: 0.8, type: 'sine', vol: 0.11, attack: 0.018, detune: 7, echo: 0.45 });      // 따뜻한 몸통
+      tone({ f: f * 2, dur: 0.55, type: 'triangle', vol: 0.035, attack: 0.02, cutoff: 1800, detune: -9, echo: 0.5 }); // 부드러운 윗소리
+      bell(f * 3, { vol: 0.022, dur: 0.6, delay: 0.07, echo: 0.6 });                                                // 멀리서 반짝
+      noise({ dur: 0.18, vol: 0.012, type: 'bandpass', freq: f * 6, q: 4, attack: 0.01, echo: 0.4 });               // 살짝 공기 소리
     },
     hit() {
-      noise({ dur: 0.2, vol: 0.22, type: 'lowpass', freq: 400, echo: 0.1 });              // 둔한 "퍽"
-      tone({ f: 120, slide: 55, dur: 0.3, type: 'sine', vol: 0.2, attack: 0.004, echo: 0.1 });
-      noise({ dur: 0.07, vol: 0.06, delay: 0.02, type: 'bandpass', freq: 3000, q: 3 });   // 살짝 "지직"
+      // 빨강에 맞음: 강한 경보음 "삐! 삐!" (각진 파형 두 음을 어긋나게 겹쳐 날카롭게) + 밑에 둔한 충격
+      [0, 0.17].forEach((delay) => {
+        tone({ f: 1480, dur: 0.13, type: 'square', vol: 0.09, delay, attack: 0.002, detune: 18, cutoff: 5000, echo: 0.08 });
+        tone({ f: 740, dur: 0.13, type: 'sawtooth', vol: 0.04, delay, attack: 0.002, cutoff: 3000, echo: 0 });
+      });
+      noise({ dur: 0.18, vol: 0.18, type: 'lowpass', freq: 380, echo: 0.05 });            // 둔한 "퍽"
+      tone({ f: 110, slide: 55, dur: 0.25, type: 'sine', vol: 0.18, attack: 0.004, echo: 0.05 });
     },
     crack() {
       // 유리에 금 가는 소리: 맑은 "찡" + 가는 "찌직"

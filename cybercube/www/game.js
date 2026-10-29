@@ -3,16 +3,25 @@
   const COLS = 6;
   const ROWS = 8;
   const MAX_LIVES = 3;
-  const INVINCIBLE_TIME = 1.2;
+  const INVINCIBLE_TIME = 1.2;  // 빨강에 닿은 뒤 깜빡이는 시간: 생명이 더 깎이지 않지만 파랑도 못 먹음 (state.hurt)
   const BLUE_SHUFFLE_TIME = 5;  // 남은 파랑을 다른 칸으로 옮기는 주기 (초)
   const BLUE_SHUFFLE_WARN = 1;
+  const VISIBLE_BLUES = 8;      // 판에 한 번에 보이는 파랑 수 (나머지는 하나 먹을 때마다 빈 칸에 하나씩 나타남)
   const MODAL_GUARD_MS = 400;
-  const WALL_ROOM = 28;         // 판 바깥 벽이 들어갈 여백 (px, 양쪽 합)
+  const WALL_ROOM = 24;         // 판 바깥 벽이 들어갈 여백 (px, 양쪽 합)
   const FALL_MS = 700;          // 판 밖으로 떨어지는 연출 시간
   const DRAG_STEP = 0.075;      // 공을 끌 때 한 칸 이동 간격 (초)
   const DRAG_GRAB = 1.0;        // 공 중심에서 이 칸 수 안을 터치하면 '공 잡기'
   const DRAG_HYSTERESIS = 0.15; // 목표 칸이 바뀌려면 칸 경계를 이만큼(칸 비율) 더 넘어야 함 → 경계에서 안 떨림   // 창이 뜬 뒤 이 시간 동안은 버튼이 안 눌림  // 옮기기 전에 깜빡이는 시간 (초)
   const SAVE_KEY = 'cybercube.progress';
+  const TELEPORT_PRICE = 10;    // 순간이동 아이템 가격 (점수). 시험용 10점, 시험 끝나면 1000으로
+  const FREEZE_PRICE = 10;      // 시간 정지 아이템 가격 (점수). 시험용 10점
+  const FREEZE_TIME = 5;        // 시간 정지: 빨강·깜빡임·파랑 이동·남은 시간이 이만큼(초) 멈춤 (볼은 움직임)
+  const FREEZE_HOLD = 2;        // 볼을 이만큼(초) 누르고 있으면 시간 정지
+  const DOUBLE_TAP_MS = 350;    // 볼을 이 시간 안에 두 번 탭하면 순간이동 준비
+  const TP_OUT_MS = 320;        // 순간이동: 깜빡이며 사라지는 시간
+  const TP_IN_MS = 380;         //           깜빡이며 나타나는 시간
+  const UNLOCK_ALL = true;      // 시험용: 모든 레벨·스테이지 열기 (출시 전에 false로)
 
   const $ = (id) => document.getElementById(id);
   const t = window.I18N.t;
@@ -28,12 +37,23 @@
   const modal = $('modal');
 
   // ── 저장 ──
-  // stars: 스테이지별 별, best: 스테이지별 최고 기록 (ms, 낮을수록 좋음), name: 랭킹 닉네임
-  let progress = { stars: {}, best: {}, name: '', sound: true, updated: 0 };
+  // earned: 스테이지별로 지금까지 번 점수 (클리어할 때마다 쌓임, 실패한 판은 안 쌓임). 모은 점수 = 전부 더한 값
+  // points: 스테이지별 최고 점수, cleared: 깬 스테이지 (광고로 이어해서 깬 것도), name: 랭킹 닉네임
+  // tpBought·tpUsed: 순간이동을 산 개수·쓴 개수 (남은 개수 = 산 것 - 쓴 것, 산 만큼 점수에서 빠짐)
+  // frBought·frUsed: 시간 정지를 산 개수·쓴 개수 (같은 방식)
+  // stars·best: 예전(별·시간 기록) 저장값. 지금은 안 씀
+  let progress = { earned: {}, tpBought: 0, tpUsed: 0, frBought: 0, frUsed: 0, points: {}, cleared: {}, stars: {}, best: {}, name: '', sound: true, updated: 0 };
   try {
     const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
     if (saved) progress = { ...progress, ...saved };
   } catch (e) { /* 저장소를 못 쓰면 새로 시작 */ }
+
+  // 번 점수: 지금 있는 스테이지들에서 번 점수의 합 (= 레벨 탭 숫자의 합)
+  const earnedScore = () => STAGES.reduce((sum, s) => sum + (progress.earned[s.id] || 0), 0);
+  // 가진 점수: 번 점수 - 아이템 사는 데 쓴 점수
+  const totalScore = () => earnedScore() - (progress.tpBought || 0) * TELEPORT_PRICE - (progress.frBought || 0) * FREEZE_PRICE;
+  const teleportsLeft = () => (progress.tpBought || 0) - (progress.tpUsed || 0);
+  const freezesLeft = () => (progress.frBought || 0) - (progress.frUsed || 0);
 
   function save() {
     progress.updated = Date.now();
@@ -45,15 +65,24 @@
   function applyCloudProgress(merged) {
     Object.assign(progress.stars, merged.stars);
     Object.assign(progress.best, merged.best);
+    Object.assign(progress.points, merged.points);
+    Object.assign(progress.earned, merged.earned);
+    progress.tpBought = Math.max(progress.tpBought || 0, merged.tpBought || 0);
+    progress.tpUsed = Math.max(progress.tpUsed || 0, merged.tpUsed || 0);
+    progress.frBought = Math.max(progress.frBought || 0, merged.frBought || 0);
+    progress.frUsed = Math.max(progress.frUsed || 0, merged.frUsed || 0);
+    Object.assign(progress.cleared, merged.cleared);
     progress.name = merged.name || progress.name;
     progress.updated = merged.updated;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(progress)); } catch (e) { /* 무시 */ }
     if (!state && demoScreen.classList.contains('hidden') && privacyScreen.classList.contains('hidden')) showStages();
   }
 
-  // 기록 = 클리어 시간 + 피격당 5초 (firestore.rules와 같은 계산)
-  const HIT_PENALTY_MS = 5000;
-  const fmt = (ms) => `${(ms / 1000).toFixed(2)}s`;
+  // 점수 = 밟은 파랑 큐브 숫자의 합 (화면에는 노란 동전과 함께: class="coin-num")
+  // 숫자가 1 커질 때마다 나올 확률에 곱하는 값: 레벨 첫 스테이지 → 마지막 스테이지
+  // 1보다 작으면 낮은 숫자가 많이, 크면 높은 숫자가 많이 나옴
+  // (1~10 기준) 첫 스테이지: 1이 60%, 10은 거의 안 나옴(0.01%) / 마지막 스테이지: 1이 1%, 10이 34%
+  const NUM_RATIO = [0.4, 1.5];
   const playerName = () => {
     if (!progress.name) { progress.name = `PLAYER${Math.floor(1000 + Math.random() * 9000)}`; save(); }
     return progress.name;
@@ -67,6 +96,7 @@
   let state = null;
   let cells = [];        // 칸 DOM
   let cellClass = [];    // 칸별 현재 클래스 (바뀐 칸만 갱신)
+  let cellNum = [];      // 칸별 지금 보이는 숫자
   let lastTime = 0;
   let rafId = 0;
 
@@ -75,9 +105,14 @@
   function tierOf(n) {
     let ti = 0;
     while (ti < TIERS.length - 1 && n >= tierStart(ti + 1)) ti++;
-    return { tier: ti, num: n - tierStart(ti) + 1 };
+    return { tier: ti, num: STAGES[n]?.num ?? n - tierStart(ti) + 1 }; // num: 중간 스테이지를 건너뛴 시험용 레벨
   }
-  const stageLabel = (n) => { const { tier, num } = tierOf(n); return t('stageLabel', { tier: t(`tier${TIERS[tier].name}`), n: num }); };
+  const levelName = (ti) => t('level', { n: TIERS[ti].level });
+  const stageLabel = (n) => { const { tier, num } = tierOf(n); return t('stageLabel', { tier: levelName(tier), n: num }); };
+  // 단계: 레벨 안에서 1부터 (1-1 → 1단계, 1-8 → 8단계, 2-1 → 1단계 …)
+  const diffLabel = (n) => t('difficulty', { n: tierOf(n).num });
+  // 점수·랭킹을 저장하는 스테이지 이름 (stages.js의 id, 예: 'L1-2')
+  const key = (n) => STAGES[n].id;
 
   const idx = (x, y) => y * COLS + x;
   const inside = (x, y) => x >= 0 && x < COLS && y >= 0 && y < ROWS;
@@ -86,16 +121,159 @@
     board.querySelectorAll('.cell').forEach((c) => c.remove());
     cells = [];
     cellClass = [];
+    cellNum = [];
     for (let i = 0; i < COLS * ROWS; i++) {
       const c = document.createElement('div');
       c.className = 'cell';
+      c.appendChild(document.createElement('span')).className = 'num'; // 파랑 큐브 숫자
       board.insertBefore(c, playerEl);
       cells.push(c);
       cellClass.push('cell');
+      cellNum.push('');
     }
   }
 
+  // 파랑 큐브 숫자 하나 뽑기: 레벨 범위(nums) 안에서, 스테이지가 올라갈수록 높은 숫자가 잘 나옴 (NUM_RATIO)
+  // 가끔 나오는 특별한 파랑: 큰 숫자 (레벨마다 TIERS[].big) · 곱하기 (직전에 먹은 파랑 숫자 × 3/5/10/15/20)
+  const BIG_CHANCE = 0.02;   // 파랑 하나가 큰 숫자일 확률 (한 판 파랑 9개면 다섯 판에 한 번쯤)
+  const MUL_CHANCE = 0.05;
+  const MULS = [[3, 10], [5, 6], [10, 3], [15, 2], [20, 1]]; // [곱하는 수, 나오는 비율]: 3이 가장 많고 20이 가장 적게 (약 45·27·14·9·5%)
+  const pickWeighted = (weights) => {
+    let pick = Math.random() * weights.reduce((a, b) => a + b, 0);
+    for (let k = 0; k < weights.length; k++) {
+      pick -= weights[k];
+      if (pick < 0) return k;
+    }
+    return weights.length - 1;
+  };
+  function rollNumber(n) {
+    const { tier, num } = tierOf(n);
+    const [lo, hi] = TIERS[tier].nums;
+    const count = Math.max(8, TIERS[tier].stages.length); // 만들고 있는 레벨(스테이지가 8개보다 적음)도 8스테이지 기준으로
+    const r = NUM_RATIO[0] + (NUM_RATIO[1] - NUM_RATIO[0]) * ((num - 1) / (count - 1));
+    return lo + pickWeighted(Array.from({ length: hi - lo + 1 }, (_, k) => r ** k));
+  }
+  // 큰 숫자와 곱하기는 한 판에 같이 안 나옴: 그 판에서 먼저 나온 쪽만 끝까지 나옴 (곱하기가 큰 숫자를 곱하면 점수가 너무 커짐)
+  // game.eventKind: 그 판에 이미 나온 특별한 파랑 종류 ('' = 아직 없음)
+  function rollBlueIn(game, n) {
+    const b = rollBlue(n, game.eventKind === 'big' ? 'mul' : game.eventKind === 'mul' ? 'big' : '');
+    if (b.kind && !game.eventKind) game.eventKind = b.kind;
+    return b;
+  }
+  // 파랑 하나의 종류와 숫자: kind '' 보통 / 'big' 큰 숫자 / 'mul' 곱하기 (num = 곱하는 수)
+  // ban: 이번엔 안 나올 종류 (rollBlueIn). 막힌 종류가 뽑히면 보통 숫자
+  function rollBlue(n, ban = '') {
+    const roll = Math.random();
+    const big = TIERS[tierOf(n).tier].big;
+    if (big && roll < BIG_CHANCE && ban !== 'big') {
+      const { tier, num } = tierOf(n);
+      const count = Math.max(8, TIERS[tier].stages.length);
+      const r = NUM_RATIO[0] + (NUM_RATIO[1] - NUM_RATIO[0]) * ((num - 1) / (count - 1)); // 보통 숫자와 같이 단계가 올라갈수록 큰 쪽
+      return { kind: 'big', num: big[pickWeighted(big.map((_, k) => r ** k))] };
+    }
+    if (roll >= BIG_CHANCE && roll < BIG_CHANCE + MUL_CHANCE && ban !== 'mul') return { kind: 'mul', num: MULS[pickWeighted(MULS.map(([, w]) => w))][0] };
+    return { kind: '', num: rollNumber(n) };
+  }
+
+  // axis: 'any' 쓸기 → 이번 판에 고른 방향(row/col)으로, 'other' 쓸기 → 그 반대 방향으로. 시작 줄은 at(0~1) 비율로
+  function sweepAxis(h, anyAxis) {
+    if (h.type !== 'sweep' || h.at === undefined) return h;
+    const axis = h.axis === 'any' ? anyAxis : h.axis === 'other' ? (anyAxis === 'row' ? 'col' : 'row') : h.axis; // other = 반대 방향
+    const len = axis === 'row' ? ROWS : COLS;
+    return { ...h, axis, pos: Math.round(h.at * (len - 1)), speed: h.speed[axis] };
+  }
+
+  // 같은 난이도의 새 판: 할 때마다 파랑 자리, 튕김 빨강의 시작 자리·방향을 랜덤으로
+  // (파랑 개수, 빨강 개수·속도·직선/대각선, 쓸기, 초록, 시간은 스테이지 그대로)
+  // 빨강은 시작 칸 둘레 1칸 안에서는 출발하지 않음 (시작하자마자 맞지 않게)
+  function randomLayout(tiles, hazards, px, py) {
+    const blueCount = tiles.filter((t) => t === 'B').length;
+    const free = [];
+    tiles.forEach((t, i) => {
+      if (t === 'B') tiles[i] = '.';
+      if (tiles[i] === '.' && i !== idx(px, py)) free.push(i);
+    });
+    const take = (list) => list.splice(Math.floor(Math.random() * list.length), 1)[0];
+    const blues = free.slice();
+    for (let k = 0; k < blueCount && blues.length; k++) tiles[take(blues)] = 'B';
+    const redFree = free.filter((i) => Math.max(Math.abs(i % COLS - px), Math.abs(Math.floor(i / COLS) - py)) > 1);
+    const STRAIGHT = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    const DIAG = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+    return hazards.map((h) => {
+      if (h.type !== 'bounce' || !redFree.length) return h;
+      const i = take(redFree);
+      const dirs = h.dx && h.dy ? DIAG : STRAIGHT;
+      const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+      return { ...h, x: i % COLS, y: Math.floor(i / COLS), dx, dy };
+    });
+  }
+
+  // 쓸기의 시작 줄·방향을 판마다 랜덤으로. 같은 방향 쓸기끼리는 2줄 이상 떨어지게,
+  // 시작 칸의 줄과 그 옆 줄에서는 출발하지 않게 (안 되면 2줄 간격 → 시작 칸 조건 → 겹치지 않기 순으로 풂)
+  // 세로 쓸기가 2개 이상이면 붙어서 같이 움직이지 않게 고르게 벌려 놓고 (6칸에 2개 = 3칸 간격, 3개 = 2칸 간격)
+  // 이웃끼리 반대 방향으로 움직여서 엇갈리게. 시작 칸 줄에서 출발하는 배치는 되도록 피하고,
+  // 시작 칸 바로 옆 줄에서 출발하면 볼 반대쪽으로 움직이게
+  function spreadCols(k, px) {
+    const gap = Math.floor(COLS / k);
+    const offsets = Array.from({ length: COLS - gap * (k - 1) }, (_, o) => o);
+    const safe = offsets.filter((o) => Array.from({ length: k }, (_, i) => o + i * gap).every((c) => c !== px));
+    const list = safe.length ? safe : offsets;
+    const o = list[Math.floor(Math.random() * list.length)];
+    const pos = Array.from({ length: k }, (_, i) => o + i * gap);
+    let d0 = Math.random() < 0.5 ? 1 : -1;
+    const near = pos.findIndex((c) => Math.abs(c - px) === 1 && c > 0 && c < COLS - 1); // 맨 끝 줄은 어차피 바로 튕겨 나와서 제외
+    if (near >= 0 && Math.sign(px - pos[near]) === d0 * (near % 2 ? -1 : 1)) d0 = -d0; // 볼 쪽으로 오면 모두 뒤집음
+    return pos.map((c, i) => ({ pos: c, dir: i % 2 ? -d0 : d0 }));
+  }
+
+  // pair 쓸기 2개는 바로 붙은 두 줄에서 같은 방향으로 출발 (두꺼운 한 줄처럼 같이 움직임)
+  function pairStart(axis, px, py) {
+    const len = axis === 'row' ? ROWS : COLS;
+    const me = axis === 'row' ? py : px;
+    const starts = Array.from({ length: len - 1 }, (_, l) => l).filter((l) => Math.abs(l - me) > 1 && Math.abs(l + 1 - me) > 1);
+    const l = starts[Math.floor(Math.random() * starts.length)];
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    return [{ pos: l, dir }, { pos: l + 1, dir }];
+  }
+
+  function randomSweeps(hazards, px, py) {
+    const used = { row: [], col: [] };
+    const pairAxis = hazards.find((h) => h.type === 'sweep' && h.pair)?.axis;
+    const pair = pairAxis ? pairStart(pairAxis, px, py) : null;
+    const colCount = hazards.filter((h) => h.type === 'sweep' && h.axis === 'col' && !h.pair).length;
+    const cols = colCount >= 2 ? spreadCols(colCount, px) : null;
+    return hazards.map((h) => {
+      if (h.type !== 'sweep') return h;
+      if (h.pair) return { ...h, ...pair.shift() };
+      if (cols && h.axis === 'col') return { ...h, ...cols.shift() };
+      const len = h.axis === 'row' ? ROWS : COLS;
+      const me = h.axis === 'row' ? py : px;
+      const lines = Array.from({ length: len }, (_, l) => l);
+      const apart = (l) => used[h.axis].every((u) => Math.abs(l - u) >= 2);
+      const away = (l) => Math.abs(l - me) > 1;
+      const free = (l) => !used[h.axis].includes(l);
+      const pick = [[apart, away], [free, away], [free], []].map((rules) => lines.filter((l) => rules.every((f) => f(l)))).find((list) => list.length);
+      const pos = pick[Math.floor(Math.random() * pick.length)];
+      used[h.axis].push(pos);
+      const dir = pos === 0 ? 1 : pos === len - 1 ? -1 : Math.random() < 0.5 ? 1 : -1;
+      return { ...h, pos, dir };
+    });
+  }
+
+  // 깜빡임 칸을 빈 바닥 칸으로 랜덤하게 옮김 (blink.move): 판을 시작할 때 a·b 모두,
+  // 그 뒤에는 한 묶음이 꺼질 때마다 그 묶음만 (다음에 켜지기 전 경고가 새 자리에 나옴). 볼이 있는 칸에도 옮겨짐
+  function moveBlink(tiles, groups) {
+    groups.forEach((g) => {
+      const count = tiles.filter((t) => t === g).length;
+      tiles.forEach((t, i) => { if (t === g) tiles[i] = '.'; });
+      const free = [];
+      tiles.forEach((t, i) => { if (t === '.') free.push(i); });
+      for (let k = 0; k < count && free.length; k++) tiles[free.splice(Math.floor(Math.random() * free.length), 1)[0]] = g;
+    });
+  }
+
   function startStage(n) {
+    const anyAxis = Math.random() < 0.5 ? 'row' : 'col'; // 'any' 쓸기가 이번 판에 쓸 방향
     const def = STAGES[n];
     const tiles = [];
     let px = 0, py = 0;
@@ -106,20 +284,43 @@
         tiles.push(ch === 'P' ? '.' : ch);
       }
     });
-    // 초록이 있으면 원래 시작 지점에서 가장 가까운 초록 칸에서 시작 (떨어져도 여기서 다시)
-    let bestG = -1, bestD = Infinity;
-    tiles.forEach((t, i) => {
-      if (t !== 'G') return;
-      const d = Math.hypot(i % COLS - px, Math.floor(i / COLS) - py) - Math.floor(i / COLS) * 0.001; // 같으면 아래 줄 쪽
-      if (d < bestD) { bestD = d; bestG = i; }
+    // randomGreen 레벨은 초록을 빈 바닥 중 아무 데로 옮김 (개수는 그대로)
+    if (TIERS[tierOf(n).tier].randomGreen) {
+      const count = tiles.filter((t) => t === 'G').length;
+      tiles.forEach((t, i) => { if (t === 'G') tiles[i] = '.'; });
+      const floor = tiles.map((t, i) => (t === '.' ? i : -1)).filter((i) => i >= 0);
+      for (let k = 0; k < count && floor.length; k++) tiles[floor.splice(Math.floor(Math.random() * floor.length), 1)[0]] = 'G';
+    }
+    // 초록이 있으면 판마다 초록 칸 중 하나를 골라 거기서 시작 (떨어져도 여기서 다시)
+    const greens = tiles.map((t, i) => (t === 'G' ? i : -1)).filter((i) => i >= 0);
+    if (greens.length) {
+      const g = greens[Math.floor(Math.random() * greens.length)];
+      px = g % COLS; py = Math.floor(g / COLS);
+    }
+    const hazards = randomLayout(tiles, def.hazards, px, py);
+    if (def.blink?.move) moveBlink(tiles, ['a', 'b']);
+    // 처음엔 VISIBLE_BLUES개만 판에, 나머지는 대기 (자리와 숫자는 나타날 때 정함)
+    const blueCount = tiles.filter((t) => t === 'B').length;
+    const reserve = [];
+    tiles.map((t, i) => i).filter((i) => tiles[i] === 'B').sort(() => Math.random() - 0.5).slice(VISIBLE_BLUES).forEach((i) => {
+      reserve.push(i);
+      tiles[i] = '.';
     });
-    if (bestG >= 0) { px = bestG % COLS; py = Math.floor(bestG / COLS); }
+    const blues = tiles.map(() => ({ kind: '', num: 0 }));
+    const game = { eventKind: '' };
+    tiles.forEach((t, i) => { if (t === 'B') blues[i] = rollBlueIn(game, n); });
 
     state = {
       n,
       def,
       tiles,                       // 'B' 파랑, 'D' 밟은 파랑, 'G' 초록, '#' 구멍, 'a'/'b' 깜빡임, '.' 바닥
-      blueLeft: tiles.filter((t) => t === 'B').length,
+      blueLeft: blueCount,         // 남은 파랑 (판에 보이는 것 + 대기)
+      reserve,                     // 아직 안 나온 파랑 (개수만 셈)
+      nums: blues.map((b) => b.num), // 파랑 큐브 숫자 (옮겨질 때 새로 뽑음)
+      kinds: blues.map((b) => b.kind), // '' 보통 / 'big' 큰 숫자 / 'mul' 곱하기 (옮겨질 때 숫자와 같이 새로 뽑음)
+      lastBlue: 0,                 // 직전에 먹은 파랑 숫자 (곱하기 계산용, 곱하기 결과는 안 넣음)
+      eventKind: game.eventKind,   // 이 판에 나온 특별한 파랑 종류 ('big' / 'mul', 다른 쪽은 이 판에 안 나옴)
+      score: 0,
       px, py,
       lives: MAX_LIVES,
       hits: 0,
@@ -128,7 +329,7 @@
       invincible: 0,
       countdown: 1.8,
       phase: 'ready',              // ready → play → paused / clear / fail
-      hazards: def.hazards.map((h) => ({ ...h, acc: 0 })),
+      hazards: randomSweeps(hazards.map((h) => sweepAxis(h, anyAxis)), px, py).map((h) => ({ ...h, acc: 0 })),
       pops: new Set(),
       shuffleSpec: def.shuffle ?? BLUE_SHUFFLE_TIME,     // 숫자 = 고정 주기, [최소, 최대] = 매번 랜덤
       shuffleLeft: nextShuffleTime(def.shuffle ?? BLUE_SHUFFLE_TIME), // 파랑이 옮겨지기까지 남은 시간
@@ -138,9 +339,11 @@
     };
     setupWalls(n);
     setupTilt(n);
+    board.classList.remove('frozen');
+    updateItemBar();
 
     stopCelebration();
-    $('stageName').textContent = stageLabel(n);
+    $('stageName').innerHTML = `<span class="diff">${diffLabel(n)}</span>${stageLabel(n)}`;
     restorePlayer();
     progress.tab = tierOf(n).tier; // 나가면 이 스테이지의 난이도 탭이 보이게
     stageScreen.classList.add('hidden');
@@ -249,7 +452,7 @@
 
   // glide: 기울기로 굴러갈 때 한 칸 걸리는 시간(초). 주면 칸 사이에서 멈추지 않고 이어서 굴러감
   function move(dx, dy, glide = 0) {
-    if (!state || state.phase !== 'play') return;
+    if (!state || state.phase !== 'play' || state.teleport === 'going') return;
     const nx = state.px + dx;
     const ny = state.py + dy;
     if (!inside(nx, ny)) {
@@ -267,10 +470,29 @@
     window.Orb.roll(playerEl, dx, dy, glide > 0 ? glide * 1000 : dx && dy ? 280 : 230);
     state.px = nx;
     state.py = ny;
-    const i = idx(nx, ny);
-    if (state.tiles[i] === 'B') {
+    arrive();
+  }
+
+  // 지금 칸에 도착: 파랑이면 점수, 마지막 파랑이면 클리어, 아니면 빨강에 닿았는지
+  function arrive() {
+    const i = idx(state.px, state.py);
+    if (state.tiles[i] === 'B' && !(state.hurt > 0)) { // 맞고 깜빡이는 동안은 못 먹음
       state.tiles[i] = 'D';
       state.blueLeft--;
+      const v = state.nums[i];
+      if (state.kinds[i] === 'mul') {
+        // 곱하기: 직전에 먹은 파랑 × 곱하는 수 (아직 먹은 게 없으면 1 × 곱하는 수)
+        const base = state.lastBlue || 1;
+        state.score += base * v;
+        floatPoints(i, base * v, `${base}×${v}`, 'mul');
+      } else {
+        state.score += v;
+        state.lastBlue = v;
+        floatPoints(i, v, '', state.kinds[i]);
+      }
+      state.nums[i] = 0;
+      state.kinds[i] = '';
+      updateHud();
       state.pops.add(i);
       setTimeout(() => state && state.pops.delete(i), 350);
       sfx.blue();
@@ -285,7 +507,7 @@
   }
 
   function checkHit() {
-    if (state.phase !== 'play' || state.invincible > 0) return;
+    if (state.phase !== 'play' || state.invincible > 0 || state.teleport === 'going') return;
     const i = idx(state.px, state.py);
     if (state.tiles[i] === 'G') return;
     if (redMap()[i] !== 2) return;
@@ -296,9 +518,11 @@
   // 생명 1개 잃기 (빨강에 닿음 / 판 밖으로 떨어짐)
   // fell = 판 밖으로 떨어져서 잃음 (마지막 생명이면 볼이 이미 안 보이므로 깨지는 연출 없이 실패)
   function loseLife(fell = false) {
+    cancelTeleport();
     state.lives--;
     state.hits++;
     state.invincible = INVINCIBLE_TIME;
+    state.hurt = INVINCIBLE_TIME;
     vibrate([60, 40, 60]);
     board.classList.remove('shake');
     void board.offsetWidth;
@@ -319,25 +543,69 @@
     return spec;
   }
 
-  // 아직 안 밟은 파랑을 빈 칸(바닥·밟은 칸)으로 순간이동
-  // 플레이어 칸, 지금 빨간 칸, 깜빡이 칸, 원래 파랑 칸으로는 안 옮김
-  function shuffleBlue() {
+  // 파랑이 갈 수 있는 빈 칸: 바닥·밟은 칸 (플레이어 칸, 지금 빨간 칸, 깜빡이 칸, 파랑 칸은 빼고)
+  function freeCells() {
     const red = redMap();
     const pool = [];
     state.tiles.forEach((t, i) => {
       if ((t === '.' || t === 'D') && red[i] === 0 && i !== idx(state.px, state.py)) pool.push(i);
     });
+    return pool;
+  }
+
+  // 판의 파랑이 VISIBLE_BLUES개보다 적으면 대기 중인 파랑을 빈 칸에 나타나게 함 (빈 칸이 없으면 다음 프레임에)
+  function topUpBlue() {
+    if (!state.reserve.length) return;
+    let shown = state.tiles.filter((t) => t === 'B').length;
+    if (shown >= VISIBLE_BLUES) return;
+    const pool = freeCells();
+    while (shown < VISIBLE_BLUES && state.reserve.length && pool.length) {
+      const to = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+      state.reserve.shift();
+      const b = rollBlueIn(state, state.n);
+      state.tiles[to] = 'B';
+      state.nums[to] = b.num;
+      state.kinds[to] = b.kind;
+      state.pops.add(to);
+      setTimeout(() => state && state.pops.delete(to), 350);
+      shown++;
+    }
+  }
+
+  // 아직 안 밟은 파랑을 빈 칸으로 순간이동 (원래 파랑 칸으로는 안 옮김), 숫자는 새로 뽑음
+  function shuffleBlue() {
+    const pool = freeCells();
     const from = [];
     state.tiles.forEach((t, i) => { if (t === 'B') from.push(i); });
+    from.forEach((i) => { state.kinds[i] = ''; }); // 모두 새로 뽑으니 예전 종류는 지우고 시작
     from.forEach((i) => {
-      if (!pool.length) return;
+      if (!pool.length) { const b = rollBlueIn(state, state.n); state.nums[i] = b.num; state.kinds[i] = b.kind; return; } // 갈 곳이 없으면 제자리에서 숫자만 새로
       const to = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
       state.tiles[i] = '.';
       state.tiles[to] = 'B';
+      // 옮겨갈 때 숫자를 새로 뽑음 (큰 숫자·곱하기도 그 순간 새로: 계속 따라다니지 않게)
+      const b = rollBlueIn(state, state.n);
+      state.nums[to] = b.num;
+      state.kinds[to] = b.kind;
+      state.nums[i] = 0;
+      state.kinds[i] = '';
       state.pops.add(to);
       setTimeout(() => state && state.pops.delete(to), 350);
     });
     if (from.length) sfx.shuffle();
+  }
+
+  // 밟은 칸 위로 "+숫자"가 떠오르며 사라짐
+  // formula: 곱하기 계산식 (예: 10×20, 위에 작게), kind 'big'/'mul'이면 더 크고 색이 다름
+  function floatPoints(i, v, formula = '', kind = '') {
+    const el = document.createElement('div');
+    el.className = `float-points coin-num${kind ? ` ${kind}` : ''}`;
+    el.textContent = `+${v}`;
+    if (formula) el.insertAdjacentHTML('afterbegin', `<small>${formula}</small>`);
+    el.style.left = `${((i % COLS) + 0.5) * (100 / COLS)}%`;
+    el.style.top = `${(Math.floor(i / COLS) + 0.5) * (100 / ROWS)}%`;
+    board.appendChild(el);
+    setTimeout(() => el.remove(), kind ? 1300 : 900);
   }
 
   // ── 육각형 금·깨짐 (모양 계산과 조각은 crack.js) ──
@@ -355,7 +623,162 @@
   // 조각 치우고 새 금 모양 준비 (판 시작·이어하기)
   function restorePlayer() {
     window.Crack.reset(playerEl);
+    playerEl.classList.remove('tp-aim', 'tp-out', 'tp-in');
     playerEl.classList.remove('falling'); // 떨어져서 끝난 판이면 다시 보이게
+  }
+
+  // ── 순간이동 ──
+  // 볼을 두 번 탭 → 볼이 깜빡이며 준비 → 갈 칸을 탭하면 깜빡이며 사라졌다가 그 칸에서 깜빡이며 나타남
+  // (가는 동안은 빨강에 안 맞음, 도착한 칸이 파랑이면 점수). 준비 중에 볼을 다시 탭하면 취소
+  function updateItemBar(msg) {
+    const bar = $('itemBar');
+    bar.classList.toggle('aim', state.teleport === 'aim');
+    bar.classList.toggle('frozen', state.frozen > 0);
+    if (msg) bar.textContent = msg;
+    else if (state.teleport === 'aim') bar.textContent = t('teleportAim');
+    else if (state.frozen > 0) bar.textContent = `⏱ ${t('freeze')} ${state.frozen.toFixed(1)}`;
+    else bar.textContent = ''; // 사용법은 🎒 아이템 창의 ?에서
+    renderGameItems();
+  }
+  let barMsgTimer = 0;
+  function flashItemBar(msg) {
+    updateItemBar(msg);
+    clearTimeout(barMsgTimer);
+    barMsgTimer = setTimeout(() => state && updateItemBar(), 1800);
+  }
+
+  // 게임 화면 아이템 버튼: 가진 개수 + 누르면 하나 삼 (게임 중에도)
+  const ITEMS = [
+    { id: 'tp', icon: '✨', name: 'teleport', price: () => TELEPORT_PRICE, left: () => teleportsLeft(), buy: () => { progress.tpBought = (progress.tpBought || 0) + 1; } },
+    { id: 'fr', icon: '⏱', name: 'freeze', price: () => FREEZE_PRICE, left: () => freezesLeft(), buy: () => { progress.frBought = (progress.frBought || 0) + 1; } },
+  ];
+  function buyItem(item) {
+    if (totalScore() < item.price()) { flashItemBar(t('notEnough')); return false; }
+    item.buy();
+    save();
+    sfx.blue();
+    vibrate(20);
+    return true;
+  }
+
+  // 산 뒤 (다시 그린 다음에 부름): 그 아이템 줄·버튼이 번쩍 + "아이콘 +1"이 떠오름, 보유 개수 톡, 점수는 "-가격"
+  function boughtFx(item) {
+    const pop = (el, text, cls) => {
+      const f = document.createElement('span');
+      f.className = `buy-float ${cls}`;
+      f.textContent = text;
+      el.appendChild(f);
+      setTimeout(() => f.remove(), 900);
+    };
+    const restart = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+    document.querySelectorAll(`.shop-item:has([data-buy="${item.id}"]), .item-chip[data-item="${item.id}"]`).forEach((row) => {
+      if (row.offsetParent === null) return; // 안 보이는 화면의 줄은 건너뜀
+      restart(row, 'bought');
+      row.querySelectorAll('small, :scope > b').forEach((n) => restart(n, 'count-pop'));
+      pop(row, `${item.icon} +1`, 'gain');
+    });
+    ['modalStars', 'totalStars', 'score'].forEach((id) => {
+      const el = $(id);
+      if (el.offsetParent === null || !el.textContent) return; // 안 보이는 곳은 건너뜀
+      restart(el, 'spent');
+      pop(el, `-${item.price()}`, 'cost');
+    });
+  }
+  let gameItemsKey = '';
+  function renderGameItems() {
+    const el = $('gameItems');
+    const key = ITEMS.map((it) => `${it.left()}/${totalScore() >= it.price()}`).join() + window.I18N.lang;
+    if (key === gameItemsKey) return;
+    gameItemsKey = key;
+    el.innerHTML = ITEMS.map((it) => `<button class="item-chip" data-item="${it.id}"${totalScore() >= it.price() ? '' : ' data-poor'} aria-label="${t(it.name)}">
+      <span class="item-icon">${it.icon}</span><b>${it.left()}</b><span class="item-buy">+<span class="coin-num">${it.price()}</span></span></button>`).join('');
+    el.querySelectorAll('.item-chip').forEach((b) => {
+      b.onclick = () => {
+        const it = ITEMS.find((x) => x.id === b.dataset.item);
+        if (buyItem(it)) { flashItemBar(`${it.icon} ${t(it.name)} +1`); if (state) updateHud(); boughtFx(it); }
+      };
+    });
+  }
+
+  // 볼을 FREEZE_HOLD초 다 눌렀을 때 (루프보다 먼저 타이머로 정확히 그 순간에 확인)
+  function holdDone(d) {
+    if (!state || state.drag !== d || d.hold === undefined) return;
+    if (!d.active || d.tx !== state.px || d.ty !== state.py || state.teleport || state.phase !== 'play') return;
+    d.hold = undefined;
+    playerEl.classList.remove('holding');
+    if (!(state.frozen > 0)) startFreeze();
+  }
+
+  // ── 시간 정지 ──
+  // 볼을 FREEZE_HOLD초 누르고 있으면 (볼 둘레에 원이 차오름) 빨강·깜빡임·파랑 이동·남은 시간이 FREEZE_TIME초 멈춤
+  // 멈춘 빨강에 닿아도 맞음. 볼만 움직임
+  function startFreeze() {
+    if (freezesLeft() <= 0) { flashItemBar(t('noFreeze')); return; }
+    progress.frUsed = (progress.frUsed || 0) + 1;
+    save();
+    state.frozen = FREEZE_TIME;
+    board.classList.add('frozen');
+    sfx.shuffle();
+    vibrate(30);
+    updateItemBar();
+  }
+  function endFreeze() {
+    state.frozen = 0;
+    board.classList.remove('frozen');
+    sfx.go();
+    updateItemBar();
+  }
+
+  function armTeleport() {
+    if (teleportsLeft() <= 0) {
+      updateItemBar(t('noTeleport'));
+      setTimeout(() => state && updateItemBar(), 1800);
+      return;
+    }
+    state.teleport = 'aim';
+    state.drag = null;
+    playerEl.classList.add('tp-aim');
+    sfx.step();
+    updateItemBar();
+  }
+
+  function cancelTeleport() {
+    if (!state || state.teleport !== 'aim') return;
+    state.teleport = null;
+    playerEl.classList.remove('tp-aim');
+    updateItemBar();
+  }
+
+  function teleportTo(x, y) {
+    const st = state;
+    st.teleport = 'going';
+    st.drag = null;
+    progress.tpUsed = (progress.tpUsed || 0) + 1;
+    save();
+    playerEl.classList.remove('tp-aim');
+    playerEl.classList.add('tp-out');
+    sfx.shuffle();
+    updateItemBar();
+    setTimeout(() => {
+      if (state !== st) return;
+      // 사라진 채로 그 칸으로 바로 옮기고 깜빡이며 나타남
+      playerEl.classList.remove('tp-out');
+      playerEl.classList.add('snap');
+      st.px = x;
+      st.py = y;
+      render();
+      void playerEl.offsetWidth;
+      playerEl.classList.remove('snap');
+      playerEl.classList.add('tp-in');
+      if (st.phase === 'play') arrive(); // 파랑이면 바로 점수 (빨강은 다 나타난 뒤에 확인)
+      setTimeout(() => {
+        if (state !== st) return;
+        playerEl.classList.remove('tp-in');
+        st.teleport = null;
+        checkHit();
+        render();
+      }, TP_IN_MS);
+    }, TP_OUT_MS);
   }
 
   // 막힌 방향으로 밀면 그쪽으로 살짝 툭 부딪힘 (입력은 받았다는 표시)
@@ -376,7 +799,8 @@
 
   // ── 루프 ──
   function loop(now) {
-    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    const realDt = (now - lastTime) / 1000; // 실제 흐른 시간 (화면이 느려도 시간 정지·누르기는 시계대로)
+    const dt = Math.min(0.05, realDt);
     lastTime = now;
     if (state.phase === 'ready') {
       const before = Math.ceil(state.countdown / 0.6);
@@ -393,23 +817,49 @@
         if (after !== before) sfx.tick();
       }
     } else if (state.phase === 'play') {
-      state.clock += dt;
-      state.timeLeft -= dt;
+      // 볼 길게 누르기 → 시간 정지 (d.hold = 누르기 시작한 때. 프레임이 느려도 실제 FREEZE_HOLD초에 바로)
+      const d = state.drag;
+      if (d && d.hold !== undefined) {
+        if (d.active && d.tx === state.px && d.ty === state.py && !state.teleport) {
+          const held = (performance.now() - d.hold) / 1000;
+          playerEl.style.setProperty('--hold', Math.min(1, held / FREEZE_HOLD).toFixed(3));
+          playerEl.classList.toggle('holding', held > 0.1 && !(state.frozen > 0));
+          if (held >= FREEZE_HOLD) holdDone(d);
+        } else { d.hold = undefined; playerEl.classList.remove('holding'); }
+      }
+      let wd = dt; // 세상 시간: 시간 정지 중이면 0
+      if (state.frozen > 0) {
+        wd = 0;
+        state.frozen -= realDt;
+        if (state.frozen <= 0) endFreeze(); else updateItemBar();
+      }
+      state.clock += wd;
+      if (state.def.blink?.move) {
+        const on = blinkState().a === 'on' ? 'a' : 'b';
+        if (state.blinkOn && on !== state.blinkOn) moveBlink(state.tiles, [state.blinkOn]); // 방금 꺼진 묶음
+        state.blinkOn = on;
+      }
+      state.timeLeft -= wd;
       if (state.invincible > 0) state.invincible = Math.max(0, state.invincible - dt);
+      if (state.hurt > 0) {
+        state.hurt -= dt;
+        if (state.hurt <= 0) { state.hurt = 0; arrive(); } // 깜빡임이 끝났을 때 파랑 위에 있으면 그때 먹음
+      }
       state.hazards.forEach((h) => {
-        h.acc += dt * h.speed;
+        h.acc += wd * h.speed;
         while (h.acc >= 1) { h.acc -= 1; stepHazard(h); }
       });
       if (state.drag) {
         state.drag.acc += dt;
         if (state.drag.acc >= DRAG_STEP) { state.drag.acc = 0; dragStep(); }
       }
-      updateTilt(dt);
+      updateTilt(wd);
       if (state.shuffleLeft > 0) {
-        state.shuffleLeft -= dt;
+        state.shuffleLeft -= wd;
         if (state.shuffleLeft <= 0) { shuffleBlue(); state.shuffleLeft += nextShuffleTime(state.shuffleSpec); }
       }
-      if (state.blueLeft === 0) clearStage(); // 혹시 파랑이 0인 채로 진행되면 바로 클리어 (광고로 이어한 뒤 등)
+      topUpBlue();
+      if (state.blueLeft === 0) { if (state.phase === 'play') clearStage(); } // 혹시 파랑이 0인 채로 진행되면 바로 클리어 (광고로 이어한 뒤 등). 같은 프레임에 끌기로 이미 클리어했으면 또 안 함
       else checkHit();
       if (state.phase === 'play' && state.timeLeft <= 0) failStage('timeUp');
       updateHud();
@@ -429,11 +879,13 @@
       else if (t === 'G') cls += ' green';
       else if (red[i] === 2) cls += ' red';
       else if (red[i] === 1) cls += ' warn';
-      else if (t === 'B') cls += moving ? ' blue moving' : ' blue';
+      else if (t === 'B') cls += (moving ? ' blue moving' : ' blue') + (state.kinds[i] ? ` ${state.kinds[i]}` : '');
       else if (t === 'D') cls += ' done';
       if (state.pops.has(i)) cls += ' pop';
       if (state.drag && i === idx(state.drag.tx, state.drag.ty) && i !== idx(state.px, state.py)) cls += ' target';
       if (cls !== cellClass[i]) { cells[i].className = cls; cellClass[i] = cls; }
+      const num = t !== 'B' ? '' : state.kinds[i] === 'mul' ? `×${state.nums[i]}` : String(state.nums[i]);
+      if (num !== cellNum[i]) { cells[i].firstChild.textContent = num; cellNum[i] = num; }
     }
     if (state.phase !== 'falling') playerEl.style.transform = `translate(${state.px * 100}%, ${state.py * 100}%)`; // 떨어지는 중엔 판 밖 자리 그대로
     playerEl.classList.toggle('invincible', state.invincible > 0);
@@ -450,6 +902,10 @@
 
   function updateHud() {
     $('blueLeft').textContent = state.blueLeft;
+    const scoreText = String(totalScore() + (state.banked ? 0 : state.score)); // 모은 점수 + 이번 판 (클리어해서 이미 모은 점수에 넣었으면 또 더하지 않음)
+    const scoreEl = $('score');
+    scoreEl.textContent = scoreText;
+    scoreEl.dataset.len = scoreText.length > 7 ? 'xl' : scoreText.length > 5 ? 'l' : ''; // 자리가 많으면 글자를 줄여 칸 안에 다 보이게
     $('timeLeft').textContent = Math.max(0, Math.ceil(state.timeLeft));
     $('lives').textContent = '♥'.repeat(state.lives) + '♡'.repeat(MAX_LIVES - state.lives);
     const ratio = Math.min(1, Math.max(0, state.timeLeft / state.def.time));
@@ -468,35 +924,34 @@
 
   // ── 클리어 / 실패 / 일시정지 ──
   function clearStage() {
+    if (state.phase === 'clear') return; // 두 번 불려도 점수는 한 번만 (끌기·맞은 뒤 먹기는 루프 안에서 클리어됨)
     state.phase = 'clear';
     levelBoard(); // 기울어 있었으면 평평하게
     updateHud(); // 마지막 파랑까지 0으로
     window.Ads.countResult();
     const n = state.n;
-    const ms = Math.max(3000, Math.round(state.clock * 1000));
-    const score = ms + state.hits * HIT_PENALTY_MS;
+    const score = state.score;
     vibrate(80);
+    progress.cleared[key(n)] = 1; // 다음 스테이지 열림
+    progress.earned[key(n)] = (progress.earned[key(n)] || 0) + score; // 이 스테이지에서 번 점수에 더함
+    state.banked = true;
+    const total = totalScore();
 
-    // 광고 보고 이어한 판: 별 1개, 기록·랭킹에는 안 남김
+    // 광고 보고 이어한 판: 점수·랭킹에는 안 남김
     if (state.continued) {
-      progress.stars[n] = Math.max(progress.stars[n] || 0, 1);
       save();
-      celebrate(() => showModal(t('clear'), `${fmt(score)} · ${t('continued')}`, 1, resultButtons(n)));
+      celebrate(() => showModal(t('clear'), `+${score} · ${t('continued')}`, total, resultButtons(n)));
       return;
     }
 
-    const stars = Math.max(1, 3 - state.hits);
-    const prevBest = progress.best[n];
-    const newBest = prevBest == null || score < prevBest;
-    progress.stars[n] = Math.max(progress.stars[n] || 0, stars);
-    if (newBest) progress.best[n] = score; // 기록은 바로 저장 (연출 중에 나가도 남음)
+    const prevBest = progress.points[key(n)];
+    const newBest = prevBest == null || score > prevBest;
+    if (newBest) progress.points[key(n)] = score; // 기록은 바로 저장 (연출 중에 나가도 남음)
     save();
-    const penalty = state.hits ? ` (+${state.hits * 5}s)` : '';
-    const hits = state.hits;
-    const submitted = window.cloud ? window.cloud.submit(n, { name: playerName(), score, ms, hits }) : null;
+    const submitted = window.cloud ? window.cloud.submit(key(n), { name: playerName(), score }) : null;
 
     celebrate(() => {
-      showModal(t('clear'), `${fmt(score)}${penalty}${newBest ? ` · ${t('newBest')}` : ''}`, stars, resultButtons(n));
+      showModal(t('clear'), `+${score}`, total, resultButtons(n));
       // 랭킹 순위 표시
       if (!submitted) return;
       const token = rankToken;
@@ -594,6 +1049,7 @@
 
   // 뚫린 벽으로 나가면: 판 밖으로 굴러 나가 아래로 떨어지듯 사라짐 → 생명 1개 잃고 스테이지 시작 지점에서 다시 나타남
   function fallOff(dx, dy) {
+    cancelTeleport();
     const st = state;
     st.phase = 'falling';
     st.drag = null;
@@ -847,15 +1303,15 @@
       input.blur();
       $('nameStatus').textContent = t('saved');
       document.querySelectorAll('#rankList li.me span:nth-child(2)').forEach((s) => { s.textContent = name; });
-      window.cloud?.rename(name, Object.keys(progress.best)); // 서버 기록의 이름은 뒤에서 바꿈
+      window.cloud?.rename(name, Object.keys(progress.points).filter((id) => STAGES.some((s) => s.id === id))); // 서버 기록의 이름은 뒤에서 바꿈
     };
 
-    const myBest = progress.best[n];
-    $('rankMe').textContent = myBest == null ? `${t('myBest')} —` : `${t('myBest')} ${fmt(myBest)}`;
+    const myBest = progress.points[key(n)];
+    $('rankMe').textContent = myBest == null ? `${t('myBest')} —` : `${t('myBest')} ${myBest}`;
     if (!window.cloud) { $('rankList').innerHTML = `<li class="empty">${t('offline')}</li>`; return; }
     Promise.all([
-      window.cloud.top(n, 10),
-      myBest == null ? null : window.cloud.rank(n, myBest),
+      window.cloud.top(key(n), 10),
+      myBest == null ? null : window.cloud.rank(key(n), myBest),
     ]).then(([list, myRank]) => {
       if (token !== rankToken) return;
       const ol = $('rankList');
@@ -866,14 +1322,15 @@
         const li = document.createElement('li');
         if (r.uid === window.cloud.uid) li.className = 'me';
         // 이름은 다른 사람이 입력한 값이라 textContent로만 넣음
-        [`${i + 1}`, r.name, fmt(r.score)].forEach((t) => {
+        [`${i + 1}`, r.name, r.score].forEach((t, k) => {
           const s = document.createElement('span');
+          if (k === 2) s.className = 'coin-num';
           s.textContent = t;
           li.appendChild(s);
         });
         ol.appendChild(li);
       });
-      if (myRank) $('rankMe').textContent = `${t('myBest')} ${fmt(myBest)} · #${myRank}`;
+      if (myRank) $('rankMe').textContent = `${t('myBest')} ${myBest} · #${myRank}`;
     });
   }
 
@@ -885,8 +1342,7 @@
   // 클리어 화면에서 랭킹을 열었다가 닫으면 클리어 화면으로 돌아감
   function clearModalBack() {
     const n = state.n;
-    const best = progress.best[n];
-    showModal(t('clear'), best == null ? '' : `${t('myBest')} ${fmt(best)}`, progress.stars[n], resultButtons(n));
+    showModal(t('clear'), `+${state.score}`, totalScore(), resultButtons(n));
   }
 
   // 결과 화면 버튼: 다음 행동 전에 전면 광고 차례면 먼저 보여줌 (출시 모드만)
@@ -894,9 +1350,9 @@
   function resultButtons(n) {
     const hasNext = n + 1 < STAGES.length;
     return [
-      hasNext && [t('next'), afterAd(() => startStage(n + 1))],
+      hasNext && [t('next'), afterAd(() => enterStage(n + 1))],
       [`🏆 ${t('ranking')}`, () => showRanking(n), true],
-      [t('retry'), afterAd(() => startStage(n)), true],
+      [t('retry'), afterAd(() => enterStage(n)), true],
       [t('stages'), afterAd(showStages), true],
     ];
   }
@@ -932,7 +1388,7 @@
           else showFailModal(); // 끝까지 안 봤으면 그대로
         },
       ],
-      [t('retry'), afterAd(() => startStage(n)), canContinue],
+      [t('retry'), afterAd(() => enterStage(n)), canContinue],
       [t('stages'), afterAd(showStages), true],
     ], true);
   }
@@ -973,7 +1429,7 @@
     cancelAnimationFrame(rafId);
     showModal(t('paused'), '', null, [
       [t('resume'), resume],
-      [t('retry'), () => startStage(state.n), true],
+      [t('retry'), () => enterStage(state.n), true],
       [t('stages'), showStages, true],
     ]);
   }
@@ -985,15 +1441,17 @@
     rafId = requestAnimationFrame(loop);
   }
 
-  function showModal(title, text, stars, buttons, fail = false) {
+  function showModal(title, text, points, buttons, fail = false) {
     rankToken++;
     $('modalBody').innerHTML = '';
+    $('modalBody').className = '';
     const h = $('modalTitle');
     h.textContent = title;
     h.classList.toggle('fail', fail);
     $('modalText').textContent = text;
-    $('modalStars').innerHTML = stars == null ? ''
-      : '★'.repeat(stars) + `<span class="off">${'★'.repeat(3 - stars)}</span>`;
+    const pts = $('modalStars');
+    pts.textContent = points == null ? '' : points;
+    pts.classList.toggle('coin-num', points != null);
     const box = $('modalButtons');
     box.innerHTML = '';
     // 창이 뜬 직후의 터치는 무시: 판을 탭해서 클리어하면 손을 뗀 자리로 클릭이 한 번 더 들어와서
@@ -1034,12 +1492,13 @@
     demoScreen.classList.add('hidden');
     privacyScreen.classList.add('hidden');
     stageScreen.classList.remove('hidden');
-    const unlocked = (i) => i === 0 || (progress.stars[i - 1] || 0) > 0;
-    const starsOf = (i) => progress.stars[i] || 0;
+    const cleared = (i) => !!progress.cleared[key(i)] || progress.points[key(i)] != null;
+    const unlocked = (i) => UNLOCK_ALL || i === 0 || cleared(i - 1);
+    if (progress.tab >= TIERS.length) progress.tab = null; // 레벨 구성이 바뀌어 없는 탭이면 다시 고름
 
     // 처음 열 때는 아직 안 깬 스테이지가 있는 난이도 탭
     if (progress.tab == null) {
-      const firstOpen = STAGES.findIndex((_, i) => unlocked(i) && !starsOf(i));
+      const firstOpen = STAGES.findIndex((_, i) => unlocked(i) && !cleared(i));
       progress.tab = tierOf(firstOpen < 0 ? STAGES.length - 1 : firstOpen).tier;
     }
 
@@ -1048,10 +1507,9 @@
     tabs.innerHTML = '';
     TIERS.forEach((tier, ti) => {
       const start = tierStart(ti);
-      const got = tier.stages.reduce((sum, _, k) => sum + starsOf(start + k), 0);
       const b = document.createElement('button');
       b.className = 'tab' + (ti === progress.tab ? ' active' : '') + (unlocked(start) ? '' : ' locked');
-      b.innerHTML = `${t(`tier${tier.name}`)}<small>${unlocked(start) ? '' : '🔒 '}★ ${got}/${tier.stages.length * 3}</small>`; // 잠금 표시는 아래 줄에 (이름이 한 줄로 유지되게)
+      b.innerHTML = `${t('levelTab', { n: tier.level })}${unlocked(start) ? '' : '<small>🔒</small>'}`; // 잠금 표시는 아래 줄에 (이름이 한 줄로 유지되게). 점수는 안 보여줌
       b.onclick = () => { progress.tab = ti; showStages(); };
       tabs.appendChild(b);
     });
@@ -1061,16 +1519,77 @@
     const start = tierStart(progress.tab);
     TIERS[progress.tab].stages.forEach((_, k) => {
       const i = start + k;
-      const stars = starsOf(i);
       const b = document.createElement('button');
       b.className = 'stage-btn' + (unlocked(i) ? '' : ' locked');
       b.innerHTML = unlocked(i)
-        ? `${k + 1}<small>${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</small>`
-        : `🔒<small>${k + 1}</small>`;
-      if (unlocked(i)) b.onclick = () => startStage(i);
+        ? `<span class="lvl">${diffLabel(i)}</span>` // 점수는 안 보여줌
+        : `🔒<small>${tierOf(i).num}</small>`;
+      if (unlocked(i)) b.onclick = () => enterStage(i);
       grid.appendChild(b);
     });
-    $('totalStars').textContent = `★ ${STAGES.reduce((sum, _, i) => sum + starsOf(i), 0)}`;
+    $('totalStars').textContent = totalScore(); // 가진 점수 (번 점수 - 아이템에 쓴 점수)
+    renderShop();
+  }
+
+  // 아이템 목록 (스테이지 화면 가게 · 🎒 아이템 창): 가진 개수, ? = 사용법 시연, 구매
+  // after: 사고 나서 다시 그리기, back: 시연을 닫으면 돌아갈 곳, brief: 설명 없이 한 줄로 (🎒 아이템 창)
+  function renderItemRows(el, after, back, brief = false) {
+    el.innerHTML = ITEMS.map((it) => `
+      <div class="shop-item">
+        <div class="shop-info">
+          <b>${it.icon} ${t(it.name)} <small>${t('owned', { n: it.left() })}</small></b>
+          ${brief ? '' : `<span>${t(`${it.name}How`)}</span>`}
+        </div>
+        <div class="item-actions">
+          <button class="secondary icon item-help" data-help="${it.id}" aria-label="${t('howTo')}">?</button>
+          <button class="small" data-buy="${it.id}"${totalScore() < it.price() ? ' disabled' : ''}><span class="coin-num">${it.price()}</span> ${t('buy')}</button>
+        </div>
+      </div>`).join('');
+    el.querySelectorAll('[data-buy]').forEach((b) => {
+      b.onclick = () => {
+        const it = ITEMS.find((x) => x.id === b.dataset.buy);
+        if (buyItem(it)) { after(); boughtFx(it); }
+      };
+    });
+    el.querySelectorAll('[data-help]').forEach((b) => {
+      b.onclick = () => { closeModal(); showDemo(back, false, b.dataset.help); };
+    });
+  }
+
+  // 아이템 가게: 가진 점수로 아이템을 삼
+  function renderShop() {
+    const shop = $('shop');
+    shop.innerHTML = `<div class="shop-title">${t('items')}</div><div class="shop-list"></div>`;
+    renderItemRows(shop.querySelector('.shop-list'), showStages, showStages);
+  }
+
+  // 🎒 아이템 창 (위쪽 버튼). 게임 중이면 열려 있는 동안 멈춤 → 닫으면 이어서
+  function showItems() {
+    if (state && (state.phase === 'play' || state.phase === 'ready')) {
+      state.resumePhase = state.phase;
+      state.phase = 'paused';
+      cancelAnimationFrame(rafId);
+      state.drag = null; // 누르던 볼은 놓은 것으로
+      playerEl.classList.remove('holding');
+    }
+    const close = () => {
+      if (!state) showStages();
+      else if (state.phase === 'paused') { resume(); updateHud(); updateItemBar(); }
+      else closeModal();
+    };
+    // 시연을 닫으면: 게임 중이면 게임 화면(멈춘 채)에서 아이템 창을 다시, 아니면 스테이지 화면
+    const back = () => {
+      if (!state) { showStages(); return; }
+      demoScreen.classList.add('hidden');
+      gameScreen.classList.remove('hidden');
+      resizeBoard();
+      showItems();
+    };
+    showModal(t('items'), '', totalScore(), [[t('close'), close, true]]);
+    const body = $('modalBody');
+    body.className = 'item-list';
+    const draw = () => { renderItemRows(body, draw, back, true); $('modalStars').textContent = totalScore(); };
+    draw();
   }
 
   // ── 입력 ──
@@ -1095,6 +1614,9 @@
   }
   // touch: 시작점(sx, sy), 다음 칸 기준점(x, y), 이동했는지, 마지막 방향 종류
   let touch = null;
+  let lastBallTap = 0; // 볼을 마지막으로 탭한 때 (두 번 탭 확인)
+  let secondTap = 0;   // 두 번째 탭을 누른 때 (짧게 떼면 순간이동 준비)
+  const SHORT_TAP_MS = 300;
   // 손가락 위치 → 판 위 칸 좌표 (소수, 칸 단위)
   function fingerCell(e) {
     const r = board.getBoundingClientRect();
@@ -1103,13 +1625,37 @@
   boardWrap.addEventListener('pointerdown', (e) => {
     if (celebration) { celebration.finish(); return; } // 클리어 연출 건너뛰기
     boardWrap.setPointerCapture(e.pointerId);
+    if (state && state.phase === 'play') {
+      const [fx, fy] = fingerCell(e);
+      const cx = Math.floor(fx);
+      const cy = Math.floor(fy);
+      if (state.teleport === 'going') { touch = null; return; }
+      if (state.teleport === 'aim') {
+        if (cx === state.px && cy === state.py) cancelTeleport();
+        else if (canStep(cx, cy)) teleportTo(cx, cy);
+        touch = null;
+        return;
+      }
+      // 볼을 두 번 연속 탭하면 순간이동 준비. 두 번째는 손을 짧게 뗐을 때만 (그대로 누르고 있으면 시간 정지로)
+      const now = performance.now();
+      if (cx === state.px && cy === state.py) {
+        secondTap = now - lastBallTap < DOUBLE_TAP_MS ? now : 0;
+        lastBallTap = secondTap ? 0 : now;
+      } else {
+        lastBallTap = 0;
+        secondTap = 0;
+      }
+    }
     if (state && (state.phase === 'play' || state.phase === 'ready')) {
       const [fx, fy] = fingerCell(e);
       if (Math.abs(fx - (state.px + 0.5)) <= DRAG_GRAB && Math.abs(fy - (state.py + 0.5)) <= DRAG_GRAB) {
         // 공 잡기: 처음 목표는 손가락 아래 칸 (바로 옆 칸을 눌렀으면 그 칸으로 감)
         const tx = Math.max(0, Math.min(COLS - 1, Math.floor(fx)));
         const ty = Math.max(0, Math.min(ROWS - 1, Math.floor(fy)));
-        state.drag = { tx, ty, active: true, acc: DRAG_STEP };
+        const onBall = tx === state.px && ty === state.py;
+        const d = { tx, ty, active: true, acc: DRAG_STEP, hold: onBall ? performance.now() : undefined };
+        state.drag = d;
+        if (onBall) setTimeout(() => holdDone(d), FREEZE_HOLD * 1000); // FREEZE_HOLD초가 되는 순간 바로
         touch = { mode: 'drag' };
         render();
         return;
@@ -1139,6 +1685,13 @@
   boardWrap.addEventListener('pointerup', (e) => {
     if (touch && touch.mode === 'drag') {
       if (state && state.drag) state.drag.active = false; // 마지막 목표까지 가서 멈춤
+      const quick = secondTap && performance.now() - secondTap < SHORT_TAP_MS;
+      secondTap = 0;
+      if (quick && state && state.phase === 'play' && !state.teleport && state.drag
+        && state.drag.tx === state.px && state.drag.ty === state.py) {
+        state.drag = null;
+        armTeleport();
+      }
       touch = null;
       return;
     }
@@ -1160,6 +1713,8 @@
     if (touch && touch.mode === 'drag' && state && state.drag) state.drag.active = false;
     touch = null;
   });
+  // 길게 누르면 뜨는 메뉴(복사·저장 등)를 막음: 메뉴가 뜨면 누르기가 취소돼서 시간 정지가 안 됨
+  boardWrap.addEventListener('contextmenu', (e) => e.preventDefault());
   // 판에서 손을 뗄 때 브라우저가 덧붙이는 클릭을 막음 (이동은 pointer 이벤트로 이미 처리)
   boardWrap.addEventListener('touchend', (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
 
@@ -1178,6 +1733,8 @@
   $('backBtn').onclick = showStages;
   $('pauseBtn').onclick = pause;
   $('helpBtn').onclick = () => showDemo(showStages, false);
+  $('itemsBtn').onclick = showItems;
+  $('gameItemsBtn').onclick = showItems;
 
   // 언어 선택 (data-i18n 글자는 I18N.apply가 바꾸고, 스테이지 화면은 다시 그림)
   const langBtn = $('langBtn');
@@ -1204,9 +1761,24 @@
   };
   modeBtn.classList.toggle('hidden', !window.Ads.showToggle);
   modeBtn.onclick = () => { window.Ads.setMode(window.Ads.isRelease() ? 'test' : 'release'); updateModeBtn(); };
+
+  // 점수 초기화 (시험용, 출시 전에 없앰): 번 점수와 산·쓴 아이템을 0으로. 깬 스테이지·랭킹 기록은 그대로
+  // 클라우드에도 덮어써서 다시 불러와도 안 돌아옴
+  $('buildTag').textContent = window.BUILD ? `build ${window.BUILD}` : ''; // version.js (배포할 때 만듦)
+  $('resetBtn').onclick = () => {
+    showModal(t('resetScore'), t('resetConfirm'), null, [
+      [t('ok'), () => {
+        progress.earned = {};
+        progress.tpBought = progress.tpUsed = progress.frBought = progress.frUsed = 0;
+        save();
+        showStages();
+      }],
+      [t('close'), closeModal, true],
+    ]);
+  };
   updateModeBtn();
   $('rankBtn').onclick = () => {
-    const played = Object.keys(progress.best).map(Number);
+    const played = Object.keys(progress.points).map((id) => STAGES.findIndex((s) => s.id === id)).filter((i) => i >= 0);
     showRanking(played.length ? Math.max(...played) : 0);
   };
   const soundBtn = $('soundBtn');
@@ -1234,13 +1806,38 @@
   });
 
   // withCheck: 시작 안내로 열 때만 체크 상자 표시 (? 버튼으로 열면 숨김)
-  function showDemo(done, withCheck) {
+  // item: 'tp' / 'fr'이면 그 아이템 사용법만 반복
+  function showDemo(done, withCheck, item) {
     stageScreen.classList.add('hidden');
     gameScreen.classList.add('hidden');
     privacyScreen.classList.add('hidden');
     demoScreen.classList.remove('hidden');
     demoScreen.querySelector('.intro-check').classList.toggle('hidden', !withCheck);
-    window.Demo.start(done);
+    demoScreen.querySelector('.red-check').classList.toggle('hidden', !(item && item[0] === 'r')); // 빨강 안내에만
+    window.Demo.start(done, item);
+  }
+
+  // 레벨마다 1단계에 들어갈 때마다 (다시 하기 포함) 그 레벨의 빨강 시연 ('다시 보지 않기'를 체크해야 그 레벨은 다음부터 바로 시작)
+  const RED_GUIDE_KEY = 'cybercube.hideRed'; // 다시 안 볼 레벨 목록 (예: '1,3')
+  const redCheck = $('hideRedGuide');
+  const redGuideHidden = (lv) => { try { return (localStorage.getItem(RED_GUIDE_KEY) || '').split(',').includes(String(lv)); } catch (e) { return false; } };
+  function hideRedGuide(lv) {
+    try {
+      const list = (localStorage.getItem(RED_GUIDE_KEY) || '').split(',').filter(Boolean);
+      if (!list.includes(String(lv))) localStorage.setItem(RED_GUIDE_KEY, [...list, lv].join(','));
+    } catch (e) { /* 이번 실행 동안만 */ }
+  }
+  function enterStage(n) {
+    const { tier, num } = tierOf(n);
+    const lv = TIERS[tier].level;
+    if (num !== 1 || redGuideHidden(lv) || !window.Demo.has(`r${lv}`)) { startStage(n); return; }
+    closeModal();
+    redCheck.checked = false;
+    showDemo(() => {
+      if (redCheck.checked) hideRedGuide(lv);
+      demoScreen.classList.add('hidden');
+      startStage(n);
+    }, false, `r${lv}`);
   }
 
   function showPrivacy(done) {

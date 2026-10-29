@@ -14,19 +14,18 @@
   <div id="stageScreen" class="app screen">
     <header>
       <h1>CUBE<span>CLEAN</span></h1>
-      <div class="header-right">
-        <button id="helpBtn" class="secondary icon" data-i18n-aria="howTo" aria-label="How to play">?</button>
-        <button id="rankBtn" class="secondary icon" data-i18n-aria="ranking" aria-label="Ranking">🏆</button>
-        <div class="box"><label data-i18n="stars">STARS</label><b id="totalStars">★ 0</b></div>
-      </div>
-    </header>
-    <!-- 언어 · 광고 모드 전환: 어떤 폰에서도 잘리지 않게 위쪽에 -->
-    <div class="mode-row">
       <button id="langBtn" class="secondary small lang">🌐 English</button>
-      <button id="modeBtn" class="secondary small mode" data-i18n="adTest">AD MODE · TEST</button>
+    </header>
+    <!-- 도움말 · 아이템 · 랭킹 · 점수 -->
+    <div class="header-right top-row">
+      <button id="helpBtn" class="secondary icon" data-i18n-aria="howTo" aria-label="How to play">?</button>
+      <button id="itemsBtn" class="secondary icon items-btn" data-i18n-aria="items" aria-label="Items">🎒</button>
+      <button id="rankBtn" class="secondary icon" data-i18n-aria="ranking" aria-label="Ranking">🏆</button>
+      <div class="box"><label data-i18n="score">SCORE</label><b id="totalStars" class="coin-num">0</b></div>
     </div>
     <div id="tierTabs" class="tabs"></div>
     <div id="stageGrid" class="stage-grid"></div>
+    <div id="shop" class="shop"></div>
     <div class="legend">
       <div><i class="tile blue"></i><span data-i18n="step">STEP</span></div>
       <div><i class="tile red"></i><span data-i18n="avoid">AVOID</span></div>
@@ -35,6 +34,13 @@
     <div class="footer">
       <button id="soundBtn" class="secondary small" data-i18n="soundOn">♪ ON</button>
       <a href="privacy.html" data-i18n="privacy">PRIVACY</a>
+      <!-- 광고 모드 전환 · 점수 초기화: 시험용 (출시 전에 없앰). 둘은 늘 나란히 -->
+      <div class="test-btns">
+        <button id="modeBtn" class="secondary small mode" data-i18n="adTest">AD MODE · TEST</button>
+        <button id="resetBtn" class="secondary small mode reset" data-i18n="resetScore">RESET SCORE</button>
+      </div>
+      <!-- 배포 시각: 폰에 최신 버전이 떴는지 확인용 (시험용, 출시 전에 없앰) -->
+      <small id="buildTag" class="build-tag"></small>
     </div>
   </div>
 
@@ -43,11 +49,15 @@
     <div class="topbar">
       <button id="backBtn" class="secondary icon" data-i18n-aria="stages" aria-label="Stages">◀</button>
       <div id="stageName" class="stage-name">STAGE 1</div>
-      <button id="pauseBtn" class="secondary icon" data-i18n-aria="paused" aria-label="Pause">Ⅱ</button>
+      <div class="topbar-right">
+        <button id="gameItemsBtn" class="secondary icon items-btn" data-i18n-aria="items" aria-label="Items">🎒</button>
+        <button id="pauseBtn" class="secondary icon" data-i18n-aria="paused" aria-label="Pause">Ⅱ</button>
+      </div>
     </div>
 
     <div class="hud">
       <div class="box"><label data-i18n="blue">BLUE</label><b id="blueLeft">0</b></div>
+      <div class="box"><label data-i18n="score">SCORE</label><b id="score" class="coin-num">0</b></div>
       <div class="box"><label data-i18n="time">TIME</label><b id="timeLeft">0</b></div>
       <div class="box"><label data-i18n="life">LIFE</label><b id="lives" class="lives">♥♥♥</b></div>
     </div>
@@ -56,6 +66,7 @@
     <div id="boardWrap" class="board-wrap">
       <div id="board" class="board">
         <div id="player" class="player">
+          <div class="hold-ring"></div>
           <div class="orb">
             <svg class="crack" viewBox="0 0 100 100" aria-hidden="true"></svg>
           </div>
@@ -64,7 +75,11 @@
       <div id="countdown" class="countdown hidden"></div>
       <div id="clearBanner" class="clear-banner hidden"></div>
     </div>
-    <p class="hint" data-i18n="swipeHint">SWIPE ↑ ↓ ← → ↖ ↗ ↙ ↘</p>
+    <!-- 아이템 버튼 + 그 위에 잠깐 뜨는 안내 (안내는 자리를 차지하지 않음 → 판을 크게) -->
+    <div class="item-dock">
+      <p id="itemBar" class="item-bar"></p>
+      <div id="gameItems" class="game-items"></div>
+    </div>
   </div>
 
   <!-- 시연 화면: 처음 실행할 때 + 스테이지 화면의 ? 버튼 -->
@@ -85,16 +100,20 @@
     <div class="demo-wrap">
       <div id="demoBoard" class="board demo-board">
         <div id="demoPlayer" class="player">
+          <div class="hold-ring"></div>
           <div class="orb">
             <svg class="crack" viewBox="0 0 100 100" aria-hidden="true"></svg>
           </div>
         </div>
         <div id="demoSwipe" class="swipe"><span>➜</span></div>
+        <div id="demoTap" class="demo-tap"><i></i></div>
       </div>
       <div id="demoBadge" class="demo-badge hidden"></div>
     </div>
     <div id="demoDots" class="demo-dots"></div>
     <label class="intro-check"><input type="checkbox" class="hide-intro"> <span data-i18n="dontShowAgain">Don't show this again</span></label>
+    <!-- 레벨별 빨강 안내에만: 체크하면 그 레벨은 다음부터 안 보임 -->
+    <label class="intro-check red-check hidden"><input type="checkbox" id="hideRedGuide"> <span data-i18n="dontShowAgain">Don't show this again</span></label>
     <div class="demo-nav">
       <button id="demoPrev" class="secondary icon" data-i18n-aria="prev" aria-label="Previous">◀</button>
       <button id="demoStart" data-i18n="start">START ▶</button>
@@ -143,6 +162,7 @@
   <script src="crack.js"></script>
   <script src="orb.js"></script>
   <script src="demo.js"></script>
+  <script src="version.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
